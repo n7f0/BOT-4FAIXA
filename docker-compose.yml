@@ -8,7 +8,7 @@ services:
     container_name: bot_4faixa
     restart: unless-stopped
     environment:
-      - DISCORD_TOKEN=COLE_SEU_TOKEN_AQUI
+      - DISCORD_TOKEN=${DISCORD_TOKEN}
       - DATA_DIR=/app/data
       - TZ=America/Sao_Paulo
     volumes:
