@@ -1,0 +1,24 @@
+version: "3.9"
+
+services:
+  bot:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: bot_4faixa
+    restart: unless-stopped
+    environment:
+      - DISCORD_TOKEN=COLE_SEU_TOKEN_AQUI
+      - DATA_DIR=/app/data
+      - TZ=America/Sao_Paulo
+    volumes:
+      - bot_data:/app/data
+    networks:
+      - bot_net
+
+volumes:
+  bot_data:
+
+networks:
+  bot_net:
+    driver: bridge
