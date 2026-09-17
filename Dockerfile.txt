@@ -7,5 +7,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 COPY bot.py .
 
-# dados_bot.json e backups são gravados em /app (montar como volume no compose)
+# Pasta persistente para dados_bot.json, config_bot.json e backups
+RUN mkdir -p /app/data
+
 CMD ["python", "bot.py"]
