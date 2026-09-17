@@ -1,6 +1,6 @@
 import discord
 from discord import app_commands
-from discord.ext import commands, tasks
+from discord.ext import commands
 from discord.ui import Button, View, Modal, TextInput, UserSelect, Select, ChannelSelect, RoleSelect
 import asyncio
 from datetime import datetime
@@ -8,70 +8,60 @@ import json
 import os
 import sys
 import glob
-import asyncpg
-import aiohttp
-from aiohttp import web
 
 # ========= CONFIGURAÇÕES =========
 TOKEN = os.getenv("DISCORD_TOKEN")
 if not TOKEN:
-    print("ERRO: Token do Discord não encontrado!")
+    print("ERRO: DISCORD_TOKEN não definido!")
     sys.exit(1)
 
-DATABASE_URL = os.getenv("DATABASE_URL")
-if not DATABASE_URL:
-    print("ERRO: DATABASE_URL não definida!")
-    sys.exit(1)
+DATA_DIR = os.getenv("DATA_DIR", ".")
+os.makedirs(DATA_DIR, exist_ok=True)
 
-API_BASE_URL = os.getenv("API_BASE_URL", "http://app:3000")
-BOT_INTERNAL_TOKEN = os.getenv("BOT_INTERNAL_TOKEN")
-if not BOT_INTERNAL_TOKEN:
-    print("ERRO: BOT_INTERNAL_TOKEN não definido!")
-    sys.exit(1)
+DADOS_FILE = os.path.join(DATA_DIR, "dados_bot.json")
+CONFIG_FILE = os.path.join(DATA_DIR, "config_bot.json")
 
 # ========= CATÁLOGO DE CONFIGURAÇÕES (PAINEL ADMIN) =========
-# tipo: 'channel' | 'role' | 'produto'
 SETTINGS_CONFIG = {
-    # --- Canais ---
-    'canal_logs_id':              ('📋 Canal de Logs',                     'channel'),
-    'canal_admin_logs_id':        ('🛡️ Canal de Logs Admin',              'channel'),
-    'canal_rank_id':              ('🏆 Canal de Ranking',                  'channel'),
-    'canal_registros_id':         ('📝 Canal de Registros (farms)',        'channel'),
-    'canal_backup_painel_id':     ('💾 Canal Painel Backup',               'channel'),
-    'canal_compra_venda_id':      ('🛒 Canal Painel Compra/Venda',         'channel'),
-    'canal_logs_compra_venda_id': ('📊 Canal Logs Compra/Venda',           'channel'),
-    'canal_acoes_painel_id':      ('⚔️ Canal Painel Ações',                'channel'),
-    'canal_acoes_logs_id':        ('🎯 Canal Logs Ações',                  'channel'),
-    'canal_solicitar_set_id':     ('📋 Canal Solicitar SET',               'channel'),
-    'canal_registros_set_id':     ('📁 Canal Registros SET',               'channel'),
-    'canal_painel_privado_id':    ('🔓 Canal Painel Criar Privado',        'channel'),
-    'categoria_farms_id':         ('📂 Categoria dos Canais de Farm',      'channel'),
-    # --- Cargos ---
-    'cargo_00_id':                ('👑 Cargo Administrador',               'role'),
-    'cargo_membro_id':            ('👤 Cargo Membro',                      'role'),
-    'cargo_aprovar_set_id':       ('✅ Cargo Aprovar SET',                 'role'),
-    'cargos_compra_venda_ids':    ('💸 Cargos Compra/Venda (IDs, vírgula)','produto'),
+    # Canais
+    'canal_logs_id':              ('📋 Canal de Logs',                      'channel'),
+    'canal_admin_logs_id':        ('🛡️ Canal de Logs Admin',               'channel'),
+    'canal_rank_id':              ('🏆 Canal de Ranking',                   'channel'),
+    'canal_registros_id':         ('📝 Canal de Registros (farms)',         'channel'),
+    'canal_backup_painel_id':     ('💾 Canal Painel Backup',                'channel'),
+    'canal_compra_venda_id':      ('🛒 Canal Painel Compra/Venda',          'channel'),
+    'canal_logs_compra_venda_id': ('📊 Canal Logs Compra/Venda',            'channel'),
+    'canal_acoes_painel_id':      ('⚔️ Canal Painel Ações',                 'channel'),
+    'canal_acoes_logs_id':        ('🎯 Canal Logs Ações',                   'channel'),
+    'canal_solicitar_set_id':     ('📋 Canal Solicitar SET',                'channel'),
+    'canal_registros_set_id':     ('📁 Canal Registros SET',                'channel'),
+    'canal_painel_privado_id':    ('🔓 Canal Painel Criar Privado',         'channel'),
+    'categoria_farms_id':         ('📂 Categoria dos Canais de Farm',       'channel'),
+    # Cargos
+    'cargo_00_id':                ('👑 Cargo Administrador',                'role'),
+    'cargo_membro_id':            ('👤 Cargo Membro',                       'role'),
+    'cargo_aprovar_set_id':       ('✅ Cargo Aprovar SET',                  'role'),
+    'cargos_compra_venda_ids':    ('💸 Cargos Compra/Venda (IDs, vírgula)', 'produto'),
     'cargos_registrar_acao_ids':  ('⚔️ Cargos Registrar Ação (IDs, vírgula)','produto'),
-    # --- Produtos (nomes) ---
-    'nome_produto1':              ('📦 Nome Produto 1',                    'produto'),
-    'nome_produto2':              ('📦 Nome Produto 2',                    'produto'),
-    'nome_produto3':              ('📦 Nome Produto 3',                    'produto'),
-    'produto4_nome':              ('📦 Nome Produto 4',                    'produto'),
-    'produto5_nome':              ('📦 Nome Produto 5',                    'produto'),
-    'produto6_nome':              ('📦 Nome Produto 6',                    'produto'),
-    'produto7_nome':              ('📦 Nome Produto 7',                    'produto'),
-    'produto8_nome':              ('📦 Nome Produto 8',                    'produto'),
-    'produto9_nome':              ('📦 Nome Produto 9',                    'produto'),
-    'produto10_nome':             ('📦 Nome Produto 10',                   'produto'),
-    # --- Produtos (valores por unidade) ---
-    'valor_produto1_por_unidade': ('💰 Valor Unitário Produto 1 (R$)',     'produto'),
-    'valor_produto2_por_unidade': ('💰 Valor Unitário Produto 2 (R$)',     'produto'),
-    'valor_produto3_por_unidade': ('💰 Valor Unitário Produto 3 (R$)',     'produto'),
+    # Produtos
+    'nome_produto1':              ('📦 Nome Produto 1',                     'produto'),
+    'nome_produto2':              ('📦 Nome Produto 2',                     'produto'),
+    'nome_produto3':              ('📦 Nome Produto 3',                     'produto'),
+    'produto4_nome':              ('📦 Nome Produto 4',                     'produto'),
+    'produto5_nome':              ('📦 Nome Produto 5',                     'produto'),
+    'produto6_nome':              ('📦 Nome Produto 6',                     'produto'),
+    'produto7_nome':              ('📦 Nome Produto 7',                     'produto'),
+    'produto8_nome':              ('📦 Nome Produto 8',                     'produto'),
+    'produto9_nome':              ('📦 Nome Produto 9',                     'produto'),
+    'produto10_nome':             ('📦 Nome Produto 10',                    'produto'),
+    'valor_produto1_por_unidade': ('💰 Valor Unitário Produto 1 (R$)',      'produto'),
+    'valor_produto2_por_unidade': ('💰 Valor Unitário Produto 2 (R$)',      'produto'),
+    'valor_produto3_por_unidade': ('💰 Valor Unitário Produto 3 (R$)',      'produto'),
 }
 
 ALLOWED_SETTING_KEYS = set(SETTINGS_CONFIG.keys())
 
-# Dados particionados por guild_id
+# ========= DADOS =========
 dados = {
     "usuarios": {},
     "canais": {},
@@ -85,54 +75,46 @@ dados = {
 }
 
 def salvar_dados():
-    with open("dados_bot.json", "w", encoding="utf-8") as f:
+    os.makedirs(DATA_DIR, exist_ok=True)
+    with open(DADOS_FILE, "w", encoding="utf-8") as f:
         json.dump(dados, f, ensure_ascii=False, indent=2)
 
 def carregar_dados():
     try:
-        with open("dados_bot.json", "r", encoding="utf-8") as f:
+        with open(DADOS_FILE, "r", encoding="utf-8") as f:
             loaded = json.load(f)
             for key in dados:
                 if key not in loaded:
                     loaded[key] = {}
             dados.update(loaded)
         return True
-    except:
+    except FileNotFoundError:
+        return False
+    except Exception as e:
+        print(f"Erro carregar_dados: {e}")
         return False
 
-# ========= SALVAR CONFIGURAÇÃO NO BANCO =========
-async def save_setting(gid: int, key: str, value):
-    if key not in ALLOWED_SETTING_KEYS:
-        return False
+# ========= CONFIGURAÇÕES (SUBSTITUI O BANCO) =========
+def _load_config_file():
     try:
-        conn = await asyncpg.connect(DATABASE_URL)
-        exists = await conn.fetchrow(
-            "SELECT 1 FROM bot_settings WHERE guild_id = $1", str(gid)
-        )
-        if exists:
-            await conn.execute(
-                f'UPDATE bot_settings SET "{key}" = $1 WHERE guild_id = $2',
-                value, str(gid)
-            )
-        else:
-            await conn.execute(
-                f'INSERT INTO bot_settings (guild_id, "{key}") VALUES ($1, $2)',
-                str(gid), value
-            )
-        await conn.close()
-        if gid not in bot.guild_settings:
-            bot.guild_settings[gid] = {}
-        bot.guild_settings[gid][key] = value
-        return True
+        with open(CONFIG_FILE, "r", encoding="utf-8") as f:
+            return json.load(f)
+    except FileNotFoundError:
+        return {}
     except Exception as e:
-        print(f"[save_setting] Erro: {e}")
-        return False
+        print(f"Erro _load_config_file: {e}")
+        return {}
+
+def _save_config_file(cfg):
+    os.makedirs(DATA_DIR, exist_ok=True)
+    with open(CONFIG_FILE, "w", encoding="utf-8") as f:
+        json.dump(cfg, f, ensure_ascii=False, indent=2)
 
 # ========= CRIAÇÃO DO BOT =========
 class MeuBot(commands.Bot):
     def __init__(self):
         super().__init__(command_prefix="!", intents=discord.Intents.all())
-        self.guild_settings = {}
+        self.guild_settings = {}  # {gid: {key: value}}
 
     async def setup_hook(self):
         self.add_view(BotaoCriarCanalView())
@@ -145,92 +127,44 @@ class MeuBot(commands.Bot):
 
 bot = MeuBot()
 
-# ========= CONTROLE DE ASSINATURA =========
-active_guilds = {}
-
-async def update_active_guilds():
-    global active_guilds
-    try:
-        conn = await asyncpg.connect(DATABASE_URL)
-        rows = await conn.fetch("SELECT guild_id, status, expires_at FROM bot_subscriptions")
-        await conn.close()
-        new_active = {}
-        now = datetime.utcnow()
-        for row in rows:
-            guild_id = int(row['guild_id'])
-            if row['status'] == 'active' and row['expires_at'] and row['expires_at'] > now:
-                new_active[guild_id] = True
-            else:
-                new_active[guild_id] = False
-        for gid in bot.guild_settings:
-            if gid not in new_active:
-                new_active[gid] = False
-        active_guilds = new_active
-        print(f"✅ Assinaturas atualizadas: {sum(active_guilds.values())} ativas")
-    except Exception as e:
-        print(f"Erro ao atualizar assinaturas: {e}")
-
-@tasks.loop(hours=6)
-async def check_expired_subscriptions():
-    await update_active_guilds()
-    for gid, active in active_guilds.items():
-        if not active:
-            guild = bot.get_guild(gid)
-            if guild and guild.system_channel:
-                try:
-                    await guild.system_channel.send("⚠️ **Assinatura expirada!** Renove no site.")
-                except:
-                    pass
-
+# ========= ASSINATURA (DESATIVADA - SEMPRE ATIVA) =========
 def is_guild_active(gid: int) -> bool:
-    return active_guilds.get(gid, False)
+    return True
 
 async def check_subscription(interaction: discord.Interaction) -> bool:
-    if not interaction.guild or not is_guild_active(interaction.guild.id):
-        if not interaction.response.is_done():
-            await interaction.response.send_message("❌ Assinatura expirada. Renove no site.", ephemeral=True)
-        else:
-            await interaction.followup.send("❌ Assinatura expirada. Renove no site.", ephemeral=True)
-        return False
     return True
 
 def require_active_subscription():
     async def predicate(ctx):
-        if not is_guild_active(ctx.guild.id):
-            await ctx.send("❌ Assinatura expirada. Renove no site.")
-            return False
         return True
     return commands.check(predicate)
 
-# ========= CONFIGURAÇÕES =========
+# ========= CARREGAR/SALVAR CONFIG =========
 async def load_all_settings():
-    try:
-        conn = await asyncpg.connect(DATABASE_URL)
-        rows = await conn.fetch("SELECT * FROM bot_settings")
-        await conn.close()
-        bot.guild_settings = {}
-        for row in rows:
-            gid = int(row['guild_id'])
-            bot.guild_settings[gid] = dict(row)
-        print(f"Configurações carregadas: {len(bot.guild_settings)} servidores")
-        return True
-    except Exception as e:
-        print(f"Erro ao carregar configurações: {e}")
-        return False
+    cfg = _load_config_file()
+    bot.guild_settings = {}
+    for gid_str, data in cfg.items():
+        try:
+            gid = int(gid_str)
+            bot.guild_settings[gid] = dict(data)
+        except:
+            continue
+    print(f"✅ Configurações carregadas: {len(bot.guild_settings)} servidores")
+    return True
 
-@tasks.loop(seconds=30)
-async def check_reload_requests():
-    try:
-        conn = await asyncpg.connect(DATABASE_URL)
-        rows = await conn.fetch("SELECT id FROM bot_reload_requests WHERE processed = FALSE LIMIT 1")
-        if rows:
-            print("[BOT] Recarregando configs...")
-            await load_all_settings()
-            await update_active_guilds()
-            await conn.execute("UPDATE bot_reload_requests SET processed = TRUE")
-        await conn.close()
-    except Exception as e:
-        print(f"[BOT] Erro check_reload_requests: {e}")
+async def save_setting(gid: int, key: str, value):
+    if key not in ALLOWED_SETTING_KEYS:
+        return False
+    cfg = _load_config_file()
+    gid_str = str(gid)
+    if gid_str not in cfg:
+        cfg[gid_str] = {}
+    cfg[gid_str][key] = value
+    _save_config_file(cfg)
+    if gid not in bot.guild_settings:
+        bot.guild_settings[gid] = {}
+    bot.guild_settings[gid][key] = value
+    return True
 
 # ========= FUNÇÕES AUXILIARES =========
 def get_guild_setting(gid, key, default=None):
@@ -255,13 +189,20 @@ def tem_cargo(member, cargos_ids):
 def is_admin(member):
     cid = get_guild_setting(member.guild.id, 'cargo_00_id')
     if cid:
-        return tem_cargo(member, [int(cid)])
+        try:
+            if tem_cargo(member, [int(cid)]):
+                return True
+        except:
+            pass
     return member.guild_permissions.administrator
 
 def is_membro(member):
     cid = get_guild_setting(member.guild.id, 'cargo_membro_id')
     if cid:
-        return tem_cargo(member, [int(cid)])
+        try:
+            return tem_cargo(member, [int(cid)])
+        except:
+            return False
     return False
 
 def pode_comprar_vender(member):
@@ -285,9 +226,11 @@ def pode_aprovar_set(member):
     set_cargo = get_guild_setting(member.guild.id, 'cargo_aprovar_set_id')
     cargos = []
     if admin:
-        cargos.append(int(admin))
+        try: cargos.append(int(admin))
+        except: pass
     if set_cargo:
-        cargos.append(int(set_cargo))
+        try: cargos.append(int(set_cargo))
+        except: pass
     if cargos:
         return tem_cargo(member, cargos)
     return False
@@ -307,11 +250,14 @@ def calcular_valor_estimado(gid, produtos):
             chave_valor = 'valor_produto3_por_unidade'
         else:
             continue
-        valor_unidade = float(settings.get(chave_valor, 0) or 0)
+        try:
+            valor_unidade = float(settings.get(chave_valor, 0) or 0)
+        except:
+            valor_unidade = 0.0
         total += qtd * valor_unidade
     return total
 
-# ========= MODAIS E VIEWS EXISTENTES =========
+# ========= MODAIS BASE =========
 class MudarNomeModal(Modal, title="Mudar Nome do Canal"):
     novo_nome = TextInput(label="Novo nome", required=True)
     def __init__(self, canal):
@@ -329,8 +275,6 @@ class ConfirmResetSemanalView(View):
     def __init__(self, gid, uid, uname, canal):
         super().__init__(timeout=60)
         self.gid = gid; self.uid = uid; self.uname = uname; self.canal = canal
-    async def interaction_check(self, interaction):
-        return await check_subscription(interaction)
     @discord.ui.button(label="Sim", style=discord.ButtonStyle.danger, emoji="⚠️", custom_id="confirm_reset_sim")
     async def sim(self, interaction, button):
         await interaction.response.defer(ephemeral=True, thinking=True)
@@ -341,7 +285,7 @@ class ConfirmResetSemanalView(View):
             dados["usuarios"][gid_str][uid_str]["dinheiro_sujo"] = 0
             dados["usuarios"][gid_str][uid_str]["transacoes_dinheiro_sujo"] = []
         salvar_dados()
-        await interaction.followup.send("✅ Semana resetada com sucesso!", ephemeral=True)
+        await interaction.followup.send("✅ Semana resetada!", ephemeral=True)
         await log_acao(self.gid, "reset_semanal", interaction.user, f"Semana resetada para {self.uname}")
         self.stop()
     @discord.ui.button(label="Não", style=discord.ButtonStyle.secondary, custom_id="confirm_reset_nao")
@@ -353,8 +297,6 @@ class ConfirmarFechamentoView(View):
     def __init__(self, gid, uid, canal):
         super().__init__(timeout=60)
         self.gid = gid; self.uid = uid; self.canal = canal
-    async def interaction_check(self, interaction):
-        return await check_subscription(interaction)
     @discord.ui.button(label="Sim", style=discord.ButtonStyle.danger, emoji="🗑️", custom_id="fechar_canal_sim")
     async def sim(self, interaction, button):
         await interaction.response.defer(ephemeral=True, thinking=True)
@@ -367,7 +309,7 @@ class ConfirmarFechamentoView(View):
                 except: pass
             del dados["canais"][gid_str][uid_str]
             salvar_dados()
-        await interaction.followup.send("✅ Canal fechado com sucesso!", ephemeral=True)
+        await interaction.followup.send("✅ Canal fechado!", ephemeral=True)
         await log_acao(self.gid, "fechar_canal", interaction.user, "Canal fechado")
         self.stop()
     @discord.ui.button(label="Não", style=discord.ButtonStyle.secondary, custom_id="fechar_canal_nao")
@@ -377,11 +319,12 @@ class ConfirmarFechamentoView(View):
 
 # ========= LOGS E BACKUP =========
 async def salvar_backup_completo(gid, admin_name="Sistema"):
-    nome = f"backup_{gid}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
+    nome = os.path.join(DATA_DIR, f"backup_{gid}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json")
     backup_data = {
         "guild_id": gid,
         "data_backup": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
         "admin": admin_name,
+        "config": bot.guild_settings.get(gid, {}),
         "dados": {
             "usuarios": dados["usuarios"].get(str(gid), {}),
             "canais": dados["canais"].get(str(gid), {}),
@@ -398,14 +341,18 @@ async def salvar_backup_completo(gid, admin_name="Sistema"):
         json.dump(backup_data, f, ensure_ascii=False, indent=2)
     if str(gid) not in dados["backups_historicos"]:
         dados["backups_historicos"][str(gid)] = []
-    dados["backups_historicos"][str(gid)].append({"arquivo": nome, "data": backup_data["data_backup"], "admin": admin_name})
+    dados["backups_historicos"][str(gid)].append(
+        {"arquivo": os.path.basename(nome), "data": backup_data["data_backup"], "admin": admin_name}
+    )
     salvar_dados()
     canal = await get_configured_channel(gid, 'canal_backup_painel_id')
     if canal:
-        embed = discord.Embed(title="💾 Backup salvo", description=f"Arquivo: **{nome}**", color=0x2c2f33)
+        embed = discord.Embed(title="💾 Backup salvo", description=f"Arquivo: **{os.path.basename(nome)}**", color=0x2c2f33)
         await canal.send(embed=embed)
-        await canal.send(file=discord.File(nome))
-    return nome
+        try:
+            await canal.send(file=discord.File(nome))
+        except: pass
+    return os.path.basename(nome)
 
 async def log_acao(gid, acao, usuario, detalhes, cor=None):
     if not gid: return
@@ -420,14 +367,20 @@ async def log_acao(gid, acao, usuario, detalhes, cor=None):
     cor_final = cores.get(acao, 0x2c2f33) if cor is None else cor
     embed = discord.Embed(title=f"📌 LOG: {acao.upper()}", description=detalhes, color=cor_final, timestamp=datetime.now())
     if usuario:
-        embed.set_author(name=usuario.name, icon_url=usuario.display_avatar.url)
-    await canal.send(embed=embed)
+        try:
+            embed.set_author(name=usuario.name, icon_url=usuario.display_avatar.url)
+        except: pass
+    try:
+        await canal.send(embed=embed)
+    except: pass
 
 async def log_admin(gid, titulo, descricao, cor=0x99aab5):
     if not gid: return
     canal = await get_configured_channel(gid, 'canal_admin_logs_id')
     if canal:
-        await canal.send(embed=discord.Embed(title=titulo, description=descricao, color=cor, timestamp=datetime.now()))
+        try:
+            await canal.send(embed=discord.Embed(title=titulo, description=descricao, color=cor, timestamp=datetime.now()))
+        except: pass
 
 async def limpar_logs_usuario(gid, user_id, user_name):
     if not gid: return 0
@@ -441,12 +394,14 @@ async def limpar_logs_usuario(gid, user_id, user_name):
     for key in ['canal_logs_id', 'canal_admin_logs_id', 'canal_rank_id', 'canal_compra_venda_id']:
         canal = await get_configured_channel(gid, key)
         if canal:
-            async for msg in canal.history(limit=None):
-                if msg.author == bot.user and (f"<@{user_id}>" in msg.content or f"<@!{user_id}>" in msg.content):
-                    novo = msg.content.replace(f"<@{user_id}>", f"[REMOVIDO - {user_name}]").replace(f"<@!{user_id}>", f"[REMOVIDO - {user_name}]")
-                    try:
-                        await msg.edit(content=novo); total += 1
-                    except: pass
+            try:
+                async for msg in canal.history(limit=None):
+                    if msg.author == bot.user and (f"<@{user_id}>" in msg.content or f"<@!{user_id}>" in msg.content):
+                        novo = msg.content.replace(f"<@{user_id}>", f"[REMOVIDO - {user_name}]").replace(f"<@!{user_id}>", f"[REMOVIDO - {user_name}]")
+                        try:
+                            await msg.edit(content=novo); total += 1
+                        except: pass
+            except: pass
     if gid_str in dados["canais"] and str(user_id) in dados["canais"][gid_str]:
         canal = bot.get_channel(dados["canais"][gid_str][str(user_id)])
         if canal:
@@ -468,8 +423,6 @@ class RankingView(View):
     def __init__(self, gid=None):
         super().__init__(timeout=None)
         self.gid = gid
-    async def interaction_check(self, interaction):
-        return await check_subscription(interaction)
     @discord.ui.button(label="Atualizar", style=discord.ButtonStyle.secondary, emoji="🔄", custom_id="rank_atualizar")
     async def atualizar(self, interaction, button):
         await interaction.response.defer()
@@ -484,8 +437,6 @@ class RankingView(View):
 class ConfirmarResetView(View):
     def __init__(self, gid):
         super().__init__(timeout=60); self.gid = gid
-    async def interaction_check(self, interaction):
-        return await check_subscription(interaction)
     @discord.ui.button(label="Sim", style=discord.ButtonStyle.danger, emoji="⚠️", custom_id="reset_rank_sim")
     async def sim(self, interaction, button):
         await interaction.response.defer(ephemeral=True, thinking=True)
@@ -505,9 +456,11 @@ class ConfirmarResetView(View):
 async def atualizar_ranking(gid):
     canal = await get_configured_channel(gid, 'canal_rank_id')
     if not canal: return
-    async for msg in canal.history(limit=50):
-        if msg.author == bot.user:
-            await msg.delete()
+    try:
+        async for msg in canal.history(limit=50):
+            if msg.author == bot.user:
+                await msg.delete()
+    except: pass
     settings = bot.guild_settings.get(gid, {})
     produtos_config = [
         settings.get('nome_produto1', 'CHUMBO'),
@@ -525,7 +478,7 @@ async def atualizar_ranking(gid):
     total_dinheiro_sujo_geral = 0.0
     for uid, data in dados["usuarios"].get(str(gid), {}).items():
         if "removido_em" in data: continue
-        try: await bot.fetch_user(int(uid))
+        try: user = await bot.fetch_user(int(uid))
         except: continue
         produtos_por_usuario[uid] = {prod: 0 for prod in produtos_config}
         farms = data.get("farms", [])
@@ -553,7 +506,10 @@ async def atualizar_ranking(gid):
                 except: continue
         top_usuarios.sort(key=lambda x: x[1], reverse=True)
         top_5 = top_usuarios[:5]
-        texto = "\n".join(f"{'🥇' if i==0 else '🥈' if i==1 else '🥉' if i==2 else f'{i+1}°'} **{u[0]}** - {u[1]:,}" for i, u in enumerate(top_5)) if top_5 else "Nenhum"
+        texto = "\n".join(
+            f"{'🥇' if i==0 else '🥈' if i==1 else '🥉' if i==2 else f'{i+1}°'} **{u[0]}** - {u[1]:,}"
+            for i, u in enumerate(top_5)
+        ) if top_5 else "Nenhum"
         emb.add_field(name=f"{medalha} {nome_prod}", value=texto, inline=False)
     usuarios = []
     for uid, data in dados["usuarios"].get(str(gid), {}).items():
@@ -565,34 +521,39 @@ async def atualizar_ranking(gid):
         din_sujo = data.get("dinheiro_sujo", 0)
         usuarios.append({"nome": user.name, "total_pag": total_pag, "qtd_pag": qtd_pag, "din_sujo": din_sujo})
     lista_salario = sorted(usuarios, key=lambda x: x["total_pag"], reverse=True)[:5]
-    txt = "\n".join(f"{'🥇' if i==0 else '🥈' if i==1 else '🥉' if i==2 else f'{i+1}°'} **{u['nome']}** - R$ {u['total_pag']:,.2f} ({u['qtd_pag']} pags)" for i,u in enumerate(lista_salario) if u['total_pag']>0) or "Nenhum"
+    txt = "\n".join(
+        f"{'🥇' if i==0 else '🥈' if i==1 else '🥉' if i==2 else f'{i+1}°'} **{u['nome']}** - R$ {u['total_pag']:,.2f} ({u['qtd_pag']} pags)"
+        for i,u in enumerate(lista_salario) if u['total_pag']>0
+    ) or "Nenhum"
     emb.add_field(name="💰 TOP SALÁRIO", value=txt, inline=False)
     lista_sujo = sorted(usuarios, key=lambda x: x["din_sujo"], reverse=True)[:5]
-    txt = "\n".join(f"{'🥇' if i==0 else '🥈' if i==1 else '🥉' if i==2 else f'{i+1}°'} **{u['nome']}** - R$ {u['din_sujo']:,.2f}" for i,u in enumerate(lista_sujo) if u['din_sujo']>0) or "Nenhum"
+    txt = "\n".join(
+        f"{'🥇' if i==0 else '🥈' if i==1 else '🥉' if i==2 else f'{i+1}°'} **{u['nome']}** - R$ {u['din_sujo']:,.2f}"
+        for i,u in enumerate(lista_sujo) if u['din_sujo']>0
+    ) or "Nenhum"
     emb.add_field(name="💀 DINHEIRO SUJO", value=txt, inline=False)
-    view = RankingView(gid)
-    await canal.send(embed=emb, view=view)
+    try:
+        await canal.send(embed=emb, view=RankingView(gid))
+    except: pass
 
 # ========= BOTÃO CRIAR CANAL =========
 class BotaoCriarCanalView(View):
     def __init__(self):
         super().__init__(timeout=None)
-    async def interaction_check(self, interaction):
-        return await check_subscription(interaction)
     @discord.ui.button(label="🔓 Criar Meu Canal Privado", style=discord.ButtonStyle.success, emoji="🔓", custom_id="criar_canal_privado")
     async def criar(self, interaction, button):
         await interaction.response.defer(ephemeral=True, thinking=True)
         gid = interaction.guild.id
         cat_id = get_guild_setting(gid, 'categoria_farms_id')
         if not cat_id:
-            await interaction.followup.send("❌ Categoria de farms não configurada.", ephemeral=True); return
+            await interaction.followup.send("❌ Categoria não configurada. Peça a um admin.", ephemeral=True); return
         categoria = interaction.guild.get_channel(int(cat_id))
         if not categoria:
             await interaction.followup.send("❌ Categoria não encontrada.", ephemeral=True); return
         if str(gid) in dados["canais"] and str(interaction.user.id) in dados["canais"][str(gid)]:
             canal = interaction.guild.get_channel(dados["canais"][str(gid)][str(interaction.user.id)])
             if canal:
-                await interaction.followup.send(f"ℹ️ Você já possui um canal: {canal.mention}", ephemeral=True); return
+                await interaction.followup.send(f"ℹ️ Você já possui canal: {canal.mention}", ephemeral=True); return
         overwrites = {
             interaction.guild.default_role: discord.PermissionOverwrite(read_messages=False),
             interaction.user: discord.PermissionOverwrite(read_messages=True, send_messages=True, attach_files=True, embed_links=True),
@@ -620,7 +581,7 @@ class BotaoCriarCanalView(View):
                   f"**Farms registrados:** {qtd_farms}\n"
                   f"**Dinheiro sujo acumulado:** R$ {dinheiro_sujo:,.2f}", inline=False)
         embed.add_field(name="🎯 O que você pode fazer aqui?",
-            value="• 📦 **Farm Produtos**\n• 💰 **Farm Dinheiro Sujo**\n• ✏️ **Editar Registro**\n• 📋 **Meus Registros**\n• *(Admins têm botões extras)*", inline=False)
+            value="• 📦 **Farm Produtos**\n• 💰 **Farm Dinheiro Sujo**\n• ✏️ **Editar Registro**\n• 📋 **Meus Registros**", inline=False)
         await canal.send(embed=embed, view=view)
         await log_acao(gid, "criar_canal", interaction.user, f"Canal {canal.mention} criado")
         await interaction.followup.send(f"✅ Canal criado: {canal.mention}", ephemeral=True)
@@ -631,8 +592,6 @@ class FarmChannelView(View):
     def __init__(self, gid, user_id, user_name, canal_id):
         super().__init__(timeout=None)
         self.gid=gid; self.user_id=user_id; self.user_name=user_name; self.canal_id=canal_id
-    async def interaction_check(self, interaction):
-        return await check_subscription(interaction)
     @discord.ui.button(label="📦 Farm Produtos", style=discord.ButtonStyle.secondary, row=0, custom_id="farm_produtos")
     async def farm_produtos(self, interaction, button):
         if interaction.user.id != self.user_id and not is_admin(interaction.user):
@@ -669,7 +628,7 @@ class FarmChannelView(View):
         embed.add_field(name="👤 Membro (40%)", value=f"R$ {membro:,.2f}", inline=True)
         embed.set_footer(text=f"Admin: {interaction.user.display_name}")
         view = FechamentoSummaryView(self.gid, self.user_id, self.user_name, interaction.channel, total_sujo, lavagem, faccao, membro)
-        await interaction.followup.send(embed=embed, view=view, ephemeral=False)
+        await interaction.followup.send(embed=embed, view=view)
     @discord.ui.button(label="✏️ Mudar Nome", style=discord.ButtonStyle.secondary, row=1, custom_id="farm_mudar_nome")
     async def mudar_nome(self, interaction, button):
         if not is_admin(interaction.user):
@@ -707,7 +666,7 @@ class FarmChannelView(View):
         view = ConfirmarFechamentoView(self.gid, self.user_id, interaction.channel)
         await interaction.response.send_message("⚠️ Fechar este canal?", view=view, ephemeral=True)
 
-# ========= MODAIS DOS FARMS =========
+# ========= MODAIS FARM =========
 class FarmProdutosModal(Modal, title="Registrar Farm Produtos"):
     def __init__(self, gid, uid, uname, canal):
         super().__init__()
@@ -724,7 +683,6 @@ class FarmProdutosModal(Modal, title="Registrar Farm Produtos"):
         for prod in self.produtos:
             self.add_item(TextInput(label=prod[:45], required=False, custom_id=prod[:45]))
     async def on_submit(self, interaction):
-        if not await check_subscription(interaction): return
         await interaction.response.defer(ephemeral=True, thinking=True)
         produtos = []
         for campo in self.children:
@@ -758,9 +716,12 @@ class FarmProdutosModal(Modal, title="Registrar Farm Produtos"):
         embed.add_field(name="💰 Valor estimado", value=f"R$ {valor_estimado:,.2f}", inline=True)
         embed.set_image(url=img)
         embed.set_footer(text=f"Farm #{farm['farm_id']}")
-        await self.canal.send(embed=embed)
+        try: await self.canal.send(embed=embed)
+        except: pass
         canal_reg = await get_configured_channel(self.gid, 'canal_registros_id')
-        if canal_reg: await canal_reg.send(embed=embed)
+        if canal_reg:
+            try: await canal_reg.send(embed=embed)
+            except: pass
         await interaction.followup.send("✅ Farm registrada!", ephemeral=True)
         produtos_str = ', '.join(f"{p['produto']}:{p['quantidade']}" for p in produtos)
         await log_acao(self.gid, "registrar_farm", interaction.user, f"Produtos: {produtos_str} | Valor: R$ {valor_estimado:,.2f}")
@@ -771,7 +732,6 @@ class DinheiroSujoModal(Modal, title="Registrar Dinheiro Sujo"):
     def __init__(self, gid, uid, uname, canal):
         super().__init__(); self.gid=gid; self.uid=uid; self.uname=uname; self.canal=canal
     async def on_submit(self, interaction):
-        if not await check_subscription(interaction): return
         await interaction.response.defer(ephemeral=True, thinking=True)
         if not (self.valor.value and self.valor.value.strip()):
             await interaction.followup.send("❌ Valor inválido.", ephemeral=True); return
@@ -799,9 +759,12 @@ class DinheiroSujoModal(Modal, title="Registrar Dinheiro Sujo"):
         embed.add_field(name="Valor", value=f"R$ {val:,.2f}", inline=True)
         embed.add_field(name="Novo total", value=f"R$ {novo_total:,.2f}", inline=True)
         embed.set_image(url=img)
-        await self.canal.send(embed=embed)
+        try: await self.canal.send(embed=embed)
+        except: pass
         canal_reg = await get_configured_channel(self.gid, 'canal_registros_id')
-        if canal_reg: await canal_reg.send(embed=embed)
+        if canal_reg:
+            try: await canal_reg.send(embed=embed)
+            except: pass
         await interaction.followup.send(f"✅ R$ {val:,.2f} registrado!", ephemeral=True)
         await log_acao(self.gid, "registrar_dinheiro_sujo", interaction.user, f"Valor: R$ {val:,.2f} | Total: R$ {novo_total:,.2f}")
         await atualizar_ranking(self.gid)
@@ -811,8 +774,6 @@ class FechamentoSummaryView(View):
         super().__init__(timeout=300)
         self.gid=gid; self.uid=uid; self.uname=uname; self.canal=canal
         self.total=total; self.lavagem=lavagem; self.faccao=faccao; self.membro=membro
-    async def interaction_check(self, interaction):
-        return await check_subscription(interaction)
     @discord.ui.button(label="Continuar", style=discord.ButtonStyle.success, custom_id="fechamento_continuar")
     async def continuar(self, interaction, button):
         if not is_admin(interaction.user):
@@ -829,7 +790,6 @@ class FechamentoCaixaModal(Modal, title="Finalizar Fechamento"):
         self.gid=gid; self.uid=uid; self.uname=uname; self.canal=canal
         self.total=total; self.lavagem=lavagem; self.faccao=faccao; self.membro=membro
     async def on_submit(self, interaction):
-        if not await check_subscription(interaction): return
         await interaction.response.defer(ephemeral=True, thinking=True)
         meta_str = self.meta.value.lower()
         if meta_str not in ["sim", "não", "nao"]:
@@ -869,14 +829,17 @@ class FechamentoCaixaModal(Modal, title="Finalizar Fechamento"):
         if obs_text: embed.add_field(name="Observação", value=obs_text, inline=False)
         embed.set_image(url=img)
         embed.set_footer(text=f"Admin: {interaction.user.display_name}")
-        await self.canal.send(embed=embed)
+        try: await self.canal.send(embed=embed)
+        except: pass
         canal_reg = await get_configured_channel(self.gid, 'canal_registros_id')
-        if canal_reg: await canal_reg.send(embed=embed)
+        if canal_reg:
+            try: await canal_reg.send(embed=embed)
+            except: pass
         await interaction.followup.send(f"✅ Pagamento de R$ {pagamento:,.2f} registrado!", ephemeral=True)
         await log_acao(self.gid, "fechar_caixa", interaction.user, f"Pagamento: R$ {pagamento:,.2f} para {self.uname}")
         await atualizar_ranking(self.gid)
 
-# ========= EDIÇÃO DE REGISTROS =========
+# ========= EDIÇÃO =========
 class EscolherTipoEdicaoView(View):
     def __init__(self, gid, uid, uname):
         super().__init__(timeout=120)
@@ -888,7 +851,6 @@ class TipoEdicaoSelect(Select):
         options = [discord.SelectOption(label="Produtos", value="produtos"), discord.SelectOption(label="Dinheiro Sujo", value="dinheiro")]
         super().__init__(placeholder="O que editar?", options=options, custom_id=f"edicao_tipo_{gid}_{uid}")
     async def callback(self, interaction):
-        if not await check_subscription(interaction): return
         if self.values[0] == "produtos":
             select = EditarRegistroSelect(self.gid, self.uid, self.uname)
             view = View(timeout=None); view.add_item(select)
@@ -909,7 +871,6 @@ class EditarRegistroSelect(Select):
         if not options: options.append(discord.SelectOption(label="Nenhum registro", value="none"))
         super().__init__(options=options[:25], custom_id=f"editar_farm_select_{gid}_{uid}")
     async def callback(self, interaction):
-        if not await check_subscription(interaction): return
         if self.values[0] == "none":
             return await interaction.response.send_message("ℹ️ Nenhum farm.", ephemeral=True)
         idx = int(self.values[0])
@@ -929,7 +890,6 @@ class EditarFarmModal(Modal, title="Editar Farm"):
             elif p["produto"] == "CAPSULA": self.capsula.default = str(p["quantidade"])
             elif p["produto"] == "POLVORA": self.polvora.default = str(p["quantidade"])
     async def on_submit(self, interaction):
-        if not await check_subscription(interaction): return
         await interaction.response.defer(ephemeral=True, thinking=True)
         novos = []
         for campo, nome in [(self.chumbo, "CHUMBO"), (self.capsula, "CAPSULA"), (self.polvora, "POLVORA")]:
@@ -955,9 +915,12 @@ class EditarFarmModal(Modal, title="Editar Farm"):
         embed.add_field(name="Novos produtos", value="\n".join(f"• {p['produto']}: {p['quantidade']}" for p in novos), inline=False)
         embed.add_field(name="Valor estimado", value=f"R$ {valor_estimado:,.2f}", inline=True)
         embed.set_image(url=img)
-        await self.canal.send(embed=embed)
+        try: await self.canal.send(embed=embed)
+        except: pass
         canal_reg = await get_configured_channel(self.gid, 'canal_registros_id')
-        if canal_reg: await canal_reg.send(embed=embed)
+        if canal_reg:
+            try: await canal_reg.send(embed=embed)
+            except: pass
         await interaction.followup.send("✅ Farm editada!", ephemeral=True)
         await log_acao(self.gid, "editar_farm", interaction.user, f"Farm ID {novo_reg['farm_id']} editada")
         await atualizar_ranking(self.gid)
@@ -970,7 +933,6 @@ class EditarDinheiroSelect(Select):
         if not options: options.append(discord.SelectOption(label="Nenhum depósito", value="none"))
         super().__init__(options=options[:25], custom_id=f"editar_dinheiro_select_{gid}_{uid}")
     async def callback(self, interaction):
-        if not await check_subscription(interaction): return
         if self.values[0] == "none":
             return await interaction.response.send_message("ℹ️ Nenhum depósito.", ephemeral=True)
         idx = int(self.values[0])
@@ -985,7 +947,6 @@ class EditarDinheiroModal(Modal, title="Editar Dinheiro Sujo"):
         self.gid=gid; self.uid=uid; self.uname=uname; self.canal=canal; self.idx=idx; self.trans=trans
         self.novo_valor.default = str(trans["valor"])
     async def on_submit(self, interaction):
-        if not await check_subscription(interaction): return
         await interaction.response.defer(ephemeral=True, thinking=True)
         if not (self.novo_valor.value and self.novo_valor.value.strip()):
             await interaction.followup.send("❌ Valor inválido.", ephemeral=True); return
@@ -1010,9 +971,12 @@ class EditarDinheiroModal(Modal, title="Editar Dinheiro Sujo"):
         embed.add_field(name="Novo valor", value=f"R$ {val:,.2f}", inline=True)
         embed.add_field(name="Novo total", value=f"R$ {novo_total:,.2f}", inline=True)
         embed.set_image(url=img)
-        await self.canal.send(embed=embed)
+        try: await self.canal.send(embed=embed)
+        except: pass
         canal_reg = await get_configured_channel(self.gid, 'canal_registros_id')
-        if canal_reg: await canal_reg.send(embed=embed)
+        if canal_reg:
+            try: await canal_reg.send(embed=embed)
+            except: pass
         await interaction.followup.send("✅ Depósito editado!", ephemeral=True)
         await log_acao(self.gid, "editar_dinheiro_sujo", interaction.user, f"Novo valor: R$ {val:,.2f}")
         await atualizar_ranking(self.gid)
@@ -1031,20 +995,20 @@ async def enviar_historico_detalhado(interaction, gid, uid, uname):
             prods = ", ".join(f"{p['produto']}:{p['quantidade']}" for p in f["produtos"])
             valor = calcular_valor_estimado(gid, f["produtos"])
             txt += f"**{data}** - Farm #{f.get('farm_id','?')} - {prods} (R$ {valor:,.2f})\n"
-        if txt: embed.add_field(name="📦 Farms", value=txt, inline=False)
+        if txt: embed.add_field(name="📦 Farms", value=txt[:1024], inline=False)
     if trans:
         txt = ""
         for t in trans[-10:]:
             data = datetime.strptime(t["data"], "%Y-%m-%d %H:%M:%S").strftime("%d/%m/%Y %H:%M")
             txt += f"**{data}** - R$ {t['valor']:,.2f}\n"
         total_ds = user_data.get("dinheiro_sujo", 0)
-        embed.add_field(name=f"💰 Dinheiro Sujo (total: R$ {total_ds:,.2f})", value=txt, inline=False)
+        embed.add_field(name=f"💰 Dinheiro Sujo (total: R$ {total_ds:,.2f})", value=txt[:1024], inline=False)
     if pagamentos:
         txt = ""
         for p in pagamentos[-10:]:
             data = datetime.strptime(p["data"], "%Y-%m-%d %H:%M:%S").strftime("%d/%m/%Y %H:%M")
             txt += f"**{data}** - R$ {p['valor']:,.2f} ({p.get('tipo','Pagamento')})\n"
-        embed.add_field(name="💵 Pagamentos Recebidos", value=txt, inline=False)
+        embed.add_field(name="💵 Pagamentos Recebidos", value=txt[:1024], inline=False)
     await interaction.followup.send(embed=embed, ephemeral=True)
 
 # ========= COMPRA / VENDA =========
@@ -1057,7 +1021,6 @@ class VendaModal(Modal, title="Venda de Munição"):
     def __init__(self, gid):
         super().__init__(); self.gid = gid
     async def on_submit(self, interaction):
-        if not await check_subscription(interaction): return
         if not pode_comprar_vender(interaction.user):
             await interaction.response.send_message("❌ Sem permissão.", ephemeral=True); return
         await interaction.response.defer(ephemeral=True, thinking=True)
@@ -1084,7 +1047,8 @@ class VendaModal(Modal, title="Venda de Munição"):
             for item in itens: desc += f"• {item['tipo']} x{item['quantidade']} - R$ {item['valor']:,.2f}\n"
             embed.description = desc
             embed.set_footer(text=f"Por {interaction.user.display_name}")
-            await canal.send(embed=embed)
+            try: await canal.send(embed=embed)
+            except: pass
         await interaction.followup.send(f"✅ Venda registrada com {len(itens)} item(ns)!", ephemeral=True)
         await log_acao(self.gid, "compra_venda", interaction.user, f"Venda: {len(itens)} itens, total R$ {total_venda:,.2f}")
 
@@ -1097,11 +1061,11 @@ class CompraModal(Modal, title="Compra de Produto"):
     def __init__(self, gid):
         super().__init__(); self.gid = gid
     async def on_submit(self, interaction):
-        if not await check_subscription(interaction): return
         if not pode_comprar_vender(interaction.user):
             await interaction.response.send_message("❌ Sem permissão.", ephemeral=True); return
         await interaction.response.defer(ephemeral=True, thinking=True)
-        try: qtd_v = int(self.qtd.value); valor_v = float(self.valor.value.replace(",", "."))
+        try:
+            qtd_v = int(self.qtd.value); valor_v = float(self.valor.value.replace(",", "."))
         except:
             await interaction.followup.send("❌ Valores inválidos.", ephemeral=True); return
         registro = {"tipo": "compra", "produto": self.produto.value, "quantidade": qtd_v, "valor_total": valor_v,
@@ -1115,15 +1079,14 @@ class CompraModal(Modal, title="Compra de Produto"):
             embed = discord.Embed(title="🛒 Compra registrada", color=0x2c2f33)
             embed.description = f"**Produto:** {self.produto.value}\n**Qtd:** {qtd_v}\n**Valor:** R$ {valor_v:,.2f}\n**Facção:** {self.faccao.value}\n**Responsável:** {self.responsavel.value}"
             embed.set_footer(text=f"Por {interaction.user.display_name}")
-            await canal.send(embed=embed)
+            try: await canal.send(embed=embed)
+            except: pass
         await interaction.followup.send("✅ Compra registrada!", ephemeral=True)
         await log_acao(self.gid, "compra_venda", interaction.user, f"Compra: {qtd_v} {self.produto.value} - R$ {valor_v:,.2f}")
 
 class CompraVendaView(View):
     def __init__(self):
         super().__init__(timeout=None)
-    async def interaction_check(self, interaction):
-        return await check_subscription(interaction)
     @discord.ui.button(label="💸 Venda", style=discord.ButtonStyle.secondary, custom_id="compra_venda_venda")
     async def venda(self, interaction, button):
         await interaction.response.send_modal(VendaModal(interaction.guild.id))
@@ -1131,12 +1094,10 @@ class CompraVendaView(View):
     async def compra(self, interaction, button):
         await interaction.response.send_modal(CompraModal(interaction.guild.id))
 
-# ========= SISTEMA DE AÇÕES =========
+# ========= AÇÕES =========
 class ActionPanelView(View):
     def __init__(self):
         super().__init__(timeout=None)
-    async def interaction_check(self, interaction):
-        return await check_subscription(interaction)
     @discord.ui.button(label="⚔️ Abrir Ação", style=discord.ButtonStyle.secondary, custom_id="acao_abrir")
     async def abrir(self, interaction, button):
         if not pode_registrar_acao(interaction.user):
@@ -1162,7 +1123,6 @@ class ActionModal(Modal, title="Registrar Ação"):
     def __init__(self, gid):
         super().__init__(); self.gid = gid
     async def on_submit(self, interaction):
-        if not await check_subscription(interaction): return
         await interaction.response.defer(ephemeral=True, thinking=True)
         try: val = float(self.valor.value.replace(",", "."))
         except:
@@ -1189,7 +1149,6 @@ class MemberSelectView(View):
         await interaction.response.defer()
     @discord.ui.button(label="Confirmar", style=discord.ButtonStyle.success, custom_id="member_confirm_acao")
     async def confirm(self, interaction, button):
-        if not await check_subscription(interaction): return
         await interaction.response.defer(ephemeral=True, thinking=True)
         self.info["membros"] = self.membros
         await interaction.followup.send("📸 Envie as prints (digite `pronto` para terminar).", ephemeral=True)
@@ -1215,7 +1174,8 @@ class MemberSelectView(View):
             embed.add_field(name="Resultado", value=self.info["resultado"])
             embed.add_field(name="Participantes", value=" ".join(f"<@{m}>" for m in self.membros))
             if urls: embed.set_image(url=urls[0])
-            await canal.send(embed=embed)
+            try: await canal.send(embed=embed)
+            except: pass
         await interaction.followup.send("✅ Ação registrada!", ephemeral=True)
         self.stop()
 
@@ -1230,7 +1190,6 @@ class ActionDropdown(Select):
         options = [discord.SelectOption(label=f"{v['nome_acao']} - R$ {v['valor']:,.0f}", value=k) for k,v in actions.items()]
         super().__init__(placeholder="Escolha a ação", options=options, custom_id=f"action_dropdown_{gid}")
     async def callback(self, interaction):
-        if not await check_subscription(interaction): return
         await interaction.response.defer(ephemeral=True, thinking=True)
         action = dados["acoes"][str(self.gid)][self.values[0]]
         valor = action["valor"]; lavagem = valor * 0.25; liquido = valor - lavagem
@@ -1247,8 +1206,6 @@ class ConfirmPaymentView(View):
     def __init__(self, gid, aid, liquido, por_membro, membros):
         super().__init__(timeout=120)
         self.gid=gid; self.aid=aid; self.liquido=liquido; self.por_membro=por_membro; self.membros=membros
-    async def interaction_check(self, interaction):
-        return await check_subscription(interaction)
     @discord.ui.button(label="Confirmar Pagamento", style=discord.ButtonStyle.success, custom_id="confirm_payment_ok")
     async def confirm(self, interaction, button):
         await interaction.response.defer(ephemeral=True, thinking=True)
@@ -1274,13 +1231,14 @@ class ConfirmPaymentView(View):
                 embed.add_field(name="Ação", value=action["nome_acao"])
                 embed.add_field(name="Valor líquido", value=f"R$ {self.liquido:,.2f}")
                 if urls: embed.set_image(url=urls[0])
-                await canal.send(embed=embed)
+                try: await canal.send(embed=embed)
+                except: pass
             await interaction.followup.send("✅ Pagamento registrado!", ephemeral=True)
         else:
             await interaction.followup.send("❌ Ação não encontrada.", ephemeral=True)
         self.stop()
 
-# ========= SISTEMA DE SET =========
+# ========= SET =========
 class SolicitarSetModal(Modal, title="Solicitar SET"):
     nome = TextInput(label="Seu nome", required=True)
     id_jogo = TextInput(label="ID do jogo", required=True)
@@ -1288,7 +1246,6 @@ class SolicitarSetModal(Modal, title="Solicitar SET"):
     def __init__(self, gid):
         super().__init__(); self.gid = gid
     async def on_submit(self, interaction):
-        if not await check_subscription(interaction): return
         await interaction.response.defer(ephemeral=True, thinking=True)
         self.nome_val = self.nome.value; self.id_val = self.id_jogo.value; self.tell_val = self.tell.value
         view = RecrutadorSelectView(self)
@@ -1301,7 +1258,6 @@ class RecrutadorSelectView(View):
         select.callback = self.callback
         self.add_item(select)
     async def callback(self, interaction):
-        if not await check_subscription(interaction): return
         rec_id = int(interaction.data["values"][0])
         rec = interaction.guild.get_member(rec_id)
         if not rec:
@@ -1323,7 +1279,8 @@ class RecrutadorSelectView(View):
                 color=0x2c2f33, timestamp=datetime.now())
             embed.set_footer(text=f"ID: {pid}")
             view = AprovarSetView(self.modal.gid, pid, interaction.user.id, rec_id)
-            await canal.send(embed=embed, view=view)
+            try: await canal.send(embed=embed, view=view)
+            except: pass
         await interaction.response.send_message("✅ Solicitação enviada!", ephemeral=True)
         self.stop()
 
@@ -1331,8 +1288,6 @@ class AprovarSetView(View):
     def __init__(self, gid, pid, sol_id, rec_id):
         super().__init__(timeout=None)
         self.gid=gid; self.pid=pid; self.sol_id=sol_id; self.rec_id=rec_id
-    async def interaction_check(self, interaction):
-        return await check_subscription(interaction)
     @discord.ui.button(label="✅ Aprovar", style=discord.ButtonStyle.success, custom_id="aprovar_set_ok")
     async def aprovar(self, interaction, button):
         if not pode_aprovar_set(interaction.user):
@@ -1354,7 +1309,8 @@ class AprovarSetView(View):
             await user.send(f"❌ Seu SET foi recusado por {interaction.user.mention}.")
         except: pass
         await interaction.response.send_message("❌ SET recusado.", ephemeral=True)
-        await interaction.message.edit(view=None)
+        try: await interaction.message.edit(view=None)
+        except: pass
 
 class EscolherCargoView(View):
     def __init__(self, gid, pid, sol_id, rec_id):
@@ -1366,7 +1322,6 @@ class EscolherCargoView(View):
         select.callback = self.callback
         self.add_item(select)
     async def callback(self, interaction):
-        if not await check_subscription(interaction): return
         if self.children[0].values[0] == "none":
             await interaction.response.send_message("❌ Cargo membro não configurado.", ephemeral=True); return
         cargo_id = int(self.children[0].values[0])
@@ -1386,9 +1341,11 @@ class EscolherCargoView(View):
             except discord.Forbidden: pass
             canal = await get_configured_channel(self.gid, 'canal_registros_set_id')
             if canal:
-                async for msg in canal.history(limit=20):
-                    if msg.author == bot.user and msg.embeds and self.pid in (msg.embeds[0].footer.text if msg.embeds[0].footer else ""):
-                        await msg.edit(view=None); break
+                try:
+                    async for msg in canal.history(limit=20):
+                        if msg.author == bot.user and msg.embeds and self.pid in (msg.embeds[0].footer.text if msg.embeds[0].footer else ""):
+                            await msg.edit(view=None); break
+                except: pass
             await interaction.response.send_message(f"✅ Cargo {cargo.mention} atribuído!", ephemeral=True)
         except Exception as e:
             await interaction.response.send_message(f"❌ Erro: {e}", ephemeral=True)
@@ -1396,8 +1353,6 @@ class EscolherCargoView(View):
 class SetPainelView(View):
     def __init__(self):
         super().__init__(timeout=None)
-    async def interaction_check(self, interaction):
-        return await check_subscription(interaction)
     @discord.ui.button(label="Solicitar SET", style=discord.ButtonStyle.success, custom_id="solicitar_set_btn")
     async def solicitar(self, interaction, button):
         await interaction.response.send_modal(SolicitarSetModal(interaction.guild.id))
@@ -1406,8 +1361,6 @@ class SetPainelView(View):
 class BackupView(View):
     def __init__(self):
         super().__init__(timeout=None)
-    async def interaction_check(self, interaction):
-        return await check_subscription(interaction)
     @discord.ui.button(label="💾 Criar Backup", style=discord.ButtonStyle.secondary, custom_id="backup_criar")
     async def criar(self, interaction, button):
         if not is_admin(interaction.user):
@@ -1420,15 +1373,17 @@ class BackupView(View):
         if not is_admin(interaction.user):
             await interaction.response.send_message("❌ Sem permissão.", ephemeral=True); return
         await interaction.response.defer(ephemeral=True, thinking=True)
-        backups = glob.glob(f"backup_{interaction.guild.id}_*.json")
-        for b in backups: os.remove(b)
+        backups = glob.glob(os.path.join(DATA_DIR, f"backup_{interaction.guild.id}_*.json"))
+        for b in backups:
+            try: os.remove(b)
+            except: pass
         await interaction.followup.send(f"✅ {len(backups)} backup(s) deletados.", ephemeral=True)
     @discord.ui.button(label="🔄 Recarregar", style=discord.ButtonStyle.primary, custom_id="backup_recarregar")
     async def recarregar(self, interaction, button):
         if not is_admin(interaction.user):
             await interaction.response.send_message("❌ Sem permissão.", ephemeral=True); return
         await interaction.response.defer(ephemeral=True, thinking=True)
-        backups = sorted(glob.glob(f"backup_{interaction.guild.id}_*.json"), reverse=True)
+        backups = sorted(glob.glob(os.path.join(DATA_DIR, f"backup_{interaction.guild.id}_*.json")), reverse=True)
         if not backups:
             await interaction.followup.send("ℹ️ Nenhum backup encontrado.", ephemeral=True); return
         view = RecarregarBackupView(interaction.guild.id, backups)
@@ -1442,20 +1397,28 @@ class RecarregarBackupView(View):
             try:
                 with open(b, 'r') as f: data = json.load(f)
                 label = f"{data.get('data_backup','?')} - {data.get('admin','?')}"
-            except: label = b
+            except: label = os.path.basename(b)
             options.append(discord.SelectOption(label=label[:100], value=b))
         select = Select(options=options, custom_id=f"backup_select_{gid}")
         select.callback = self.callback
         self.add_item(select)
     async def callback(self, interaction):
-        if not await check_subscription(interaction): return
         await interaction.response.defer(ephemeral=True, thinking=True)
         arquivo = self.children[0].values[0]
-        with open(arquivo, 'r') as f: backup = json.load(f)
+        try:
+            with open(arquivo, 'r') as f: backup = json.load(f)
+        except Exception as e:
+            await interaction.followup.send(f"❌ Erro: {e}", ephemeral=True); return
         if "dados" in backup:
             for key in ["usuarios", "canais", "caixa_semana", "compras_vendas", "usuarios_banidos", "dinheiro_sujo", "acoes", "sets_pendentes", "backups_historicos"]:
-                dados[key][str(self.gid)] = backup["dados"].get(key, {} if key != "compras_vendas" and key != "usuarios_banidos" else [])
+                default = [] if key in ("compras_vendas", "usuarios_banidos") else {}
+                dados[key][str(self.gid)] = backup["dados"].get(key, default)
             salvar_dados()
+        if "config" in backup:
+            cfg = _load_config_file()
+            cfg[str(self.gid)] = backup["config"]
+            _save_config_file(cfg)
+            await load_all_settings()
         await interaction.followup.send("✅ Backup restaurado!", ephemeral=True)
         await atualizar_ranking(self.gid)
 
@@ -1485,7 +1448,8 @@ class ChannelEditView(View):
     def __init__(self, gid, key, label):
         super().__init__(timeout=120)
         self.gid = gid; self.key = key; self.label_txt = label
-        select = ChannelSelect(placeholder="Selecione o canal", channel_types=[discord.ChannelType.text, discord.ChannelType.category])
+        select = ChannelSelect(placeholder="Selecione o canal",
+                               channel_types=[discord.ChannelType.text, discord.ChannelType.category])
         select.callback = self.callback
         self.add_item(select)
     async def callback(self, interaction):
@@ -1523,10 +1487,8 @@ class SettingsCategoryView(View):
         for key, (label, cat) in SETTINGS_CONFIG.items():
             if cat != category: continue
             current = bot.guild_settings.get(gid, {}).get(key, "não configurado")
-            if current and str(current).isdigit() and category == 'channel':
-                desc = f"Atual: canal {current}"
-            elif current and str(current).isdigit() and category == 'role':
-                desc = f"Atual: cargo {current}"
+            if current and str(current).isdigit() and category in ('channel', 'role'):
+                desc = f"Atual: {current}"
             else:
                 desc = f"Atual: {str(current)[:50]}"
             options.append(discord.SelectOption(label=label[:80], value=key, description=desc[:100]))
@@ -1556,74 +1518,93 @@ async def criar_todos_paineis(guild, settings):
     if cv_id:
         canal = guild.get_channel(int(cv_id))
         if canal:
-            async for msg in canal.history(limit=20):
-                if msg.author == bot.user: await msg.delete()
+            try:
+                async for msg in canal.history(limit=20):
+                    if msg.author == bot.user: await msg.delete()
+            except: pass
             embed = discord.Embed(title="💸 SISTEMA DE COMPRA E VENDA",
                 description="Registre transações de munição e itens entre facções.", color=0x2c2f33)
             embed.add_field(name="📌 Como usar",
                 value="• **💸 Venda** – Tipos, quantidades, valores e facção compradora.\n"
                       "• **🛒 Compra** – Produto, quantidade, valor e facção vendedora.", inline=False)
             embed.set_footer(text="Apenas usuários com cargo autorizado.")
-            await canal.send(embed=embed, view=CompraVendaView())
-            msgs.append(f"✅ Compra/Venda → {canal.mention}")
+            try:
+                await canal.send(embed=embed, view=CompraVendaView())
+                msgs.append(f"✅ Compra/Venda → {canal.mention}")
+            except: pass
     # Painel privado
     pid = settings.get('canal_painel_privado_id')
     if pid:
         canal = guild.get_channel(int(pid))
         if canal:
-            async for msg in canal.history(limit=20):
-                if msg.author == bot.user: await msg.delete()
+            try:
+                async for msg in canal.history(limit=20):
+                    if msg.author == bot.user: await msg.delete()
+            except: pass
             embed = discord.Embed(title="🔓 CRIAR SEU CANAL PRIVADO",
                 description="Crie seu canal exclusivo para gerenciar seus farms.", color=0x2c2f33)
             embed.add_field(name="🎯 O que você ganha?",
                 value="• 📦 Registrar farms\n• 💰 Registrar dinheiro sujo\n• ✏️ Editar registros\n• 📋 Ver histórico\n• 📊 Fechar caixa (admins)", inline=False)
             embed.set_footer(text="Clique abaixo para criar!")
-            await canal.send(embed=embed, view=BotaoCriarCanalView())
-            msgs.append(f"✅ Painel Privado → {canal.mention}")
+            try:
+                await canal.send(embed=embed, view=BotaoCriarCanalView())
+                msgs.append(f"✅ Painel Privado → {canal.mention}")
+            except: pass
     # Backup
     bid = settings.get('canal_backup_painel_id')
     if bid:
         canal = guild.get_channel(int(bid))
         if canal:
-            async for msg in canal.history(limit=20):
-                if msg.author == bot.user: await msg.delete()
+            try:
+                async for msg in canal.history(limit=20):
+                    if msg.author == bot.user: await msg.delete()
+            except: pass
             embed = discord.Embed(title="💾 BACKUP DO SERVIDOR",
                 description="Ferramenta para admins protegerem os dados.", color=0x2c2f33)
             embed.add_field(name="🔧 Funcionalidades",
-                value="• **💾 Criar Backup** – Gera arquivo JSON\n• **🗑️ Apagar Locais** – Remove backups\n• **🔄 Recarregar** – Restaura backup", inline=False)
+                value="• **💾 Criar Backup**\n• **🗑️ Apagar Locais**\n• **🔄 Recarregar**", inline=False)
             embed.set_footer(text="Apenas administradores.")
-            await canal.send(embed=embed, view=BackupView())
-            msgs.append(f"✅ Backup → {canal.mention}")
+            try:
+                await canal.send(embed=embed, view=BackupView())
+                msgs.append(f"✅ Backup → {canal.mention}")
+            except: pass
     # Ações
     aid = settings.get('canal_acoes_painel_id')
     if aid:
         canal = guild.get_channel(int(aid))
         if canal:
-            async for msg in canal.history(limit=20):
-                if msg.author == bot.user: await msg.delete()
+            try:
+                async for msg in canal.history(limit=20):
+                    if msg.author == bot.user: await msg.delete()
+            except: pass
             embed = discord.Embed(title="⚔️ SISTEMA DE AÇÕES",
                 description="Registre operações e gerencie pagamentos.", color=0x2c2f33)
             embed.add_field(name="📌 Como funciona",
-                value="• **⚔️ Abrir Ação** – Nome, valor, resultado e participantes\n"
-                      "• **💰 Pagamento** – Calcula lavagem 25% e divide entre membros", inline=False)
+                value="• **⚔️ Abrir Ação**\n• **💰 Pagamento** – Calcula lavagem 25% e divide entre membros", inline=False)
             embed.set_footer(text="Apenas usuários autorizados.")
-            await canal.send(embed=embed, view=ActionPanelView())
-            msgs.append(f"✅ Ações → {canal.mention}")
+            try:
+                await canal.send(embed=embed, view=ActionPanelView())
+                msgs.append(f"✅ Ações → {canal.mention}")
+            except: pass
     # SET
     sid = settings.get('canal_solicitar_set_id')
     if sid:
         canal = guild.get_channel(int(sid))
         if canal:
-            async for msg in canal.history(limit=20):
-                if msg.author == bot.user: await msg.delete()
+            try:
+                async for msg in canal.history(limit=20):
+                    if msg.author == bot.user: await msg.delete()
+            except: pass
             embed = discord.Embed(title="📋 SOLICITAÇÃO DE SET",
                 description="Sistema para novos membros solicitarem entrada.", color=0x2c2f33)
             embed.add_field(name="📌 Como usar",
                 value="• **Solicitar SET** – Preenche formulário e seleciona recrutador\n"
                       "• Admins aprovam/recusam no canal de registros SET", inline=False)
             embed.set_footer(text="Apenas admins e recrutadores.")
-            await canal.send(embed=embed, view=SetPainelView())
-            msgs.append(f"✅ SET → {canal.mention}")
+            try:
+                await canal.send(embed=embed, view=SetPainelView())
+                msgs.append(f"✅ SET → {canal.mention}")
+            except: pass
     return "\n".join(msgs) if msgs else "⚠️ Nenhum canal configurado ainda. Configure os canais no painel primeiro."
 
 class AdminPanelView(View):
@@ -1635,29 +1616,29 @@ class AdminPanelView(View):
             await interaction.response.send_message("❌ Apenas administradores.", ephemeral=True)
             return False
         return True
-    @discord.ui.button(label="📢 Canais", style=discord.ButtonStyle.primary, row=0, emoji="📢")
+    @discord.ui.button(label="📢 Canais", style=discord.ButtonStyle.primary, row=0)
     async def b_canais(self, interaction, button):
         view = SettingsCategoryView(self.gid, 'channel')
         await interaction.response.send_message("Selecione o canal a configurar:", view=view, ephemeral=True)
-    @discord.ui.button(label="Cargos", style=discord.ButtonStyle.primary, row=0, emoji="👥")
+    @discord.ui.button(label="👥 Cargos", style=discord.ButtonStyle.primary, row=0)
     async def b_cargos(self, interaction, button):
         view = SettingsCategoryView(self.gid, 'role')
         await interaction.response.send_message("Selecione o cargo a configurar:", view=view, ephemeral=True)
-    @discord.ui.button(label="Produtos", style=discord.ButtonStyle.primary, row=0, emoji="📦")
+    @discord.ui.button(label="📦 Produtos", style=discord.ButtonStyle.primary, row=0)
     async def b_produtos(self, interaction, button):
         view = SettingsCategoryView(self.gid, 'produto')
         await interaction.response.send_message("Selecione o produto/cargo a configurar:", view=view, ephemeral=True)
-    @discord.ui.button(label="Criar Painéis", style=discord.ButtonStyle.success, row=1, emoji="🎛️")
+    @discord.ui.button(label="🎛️ Criar Painéis", style=discord.ButtonStyle.success, row=1)
     async def b_criar(self, interaction, button):
         await interaction.response.defer(ephemeral=True, thinking=True)
         settings = bot.guild_settings.get(self.gid, {})
         resultado = await criar_todos_paineis(interaction.guild, settings)
         await interaction.followup.send(resultado, ephemeral=True)
-    @discord.ui.button(label="Backup", style=discord.ButtonStyle.secondary, row=1, emoji="💾")
+    @discord.ui.button(label="💾 Backup", style=discord.ButtonStyle.secondary, row=1)
     async def b_backup(self, interaction, button):
         embed = discord.Embed(title="💾 BACKUP", description="Escolha uma ação:", color=0x2c2f33)
         await interaction.response.send_message(embed=embed, view=BackupView(), ephemeral=True)
-    @discord.ui.button(label="Stats", style=discord.ButtonStyle.secondary, row=1, emoji="📊")
+    @discord.ui.button(label="📊 Stats", style=discord.ButtonStyle.secondary, row=1)
     async def b_stats(self, interaction, button):
         gid = self.gid; gid_str = str(gid)
         total_usuarios = len(dados["usuarios"].get(gid_str, {}))
@@ -1672,17 +1653,15 @@ class AdminPanelView(View):
         embed.add_field(name="📦 Total de farms", value=total_farms, inline=True)
         embed.add_field(name="💰 Dinheiro sujo total", value=f"R$ {total_dinheiro_sujo:,.2f}", inline=True)
         embed.add_field(name="🔓 Canais abertos", value=total_canais, inline=True)
-        embed.add_field(name="📋 Assinatura", value="✅ Ativa" if is_guild_active(gid) else "❌ Expirada", inline=True)
         await interaction.response.send_message(embed=embed, ephemeral=True)
-    @discord.ui.button(label="Recarregar Config", style=discord.ButtonStyle.secondary, row=2, emoji="🔄")
+    @discord.ui.button(label="🔄 Recarregar", style=discord.ButtonStyle.secondary, row=2)
     async def b_reload(self, interaction, button):
         await interaction.response.defer(ephemeral=True, thinking=True)
         await load_all_settings()
-        await update_active_guilds()
         await interaction.followup.send("✅ Configurações recarregadas!", ephemeral=True)
 
 # =========================================================
-# ========= COMANDOS (SLASH + PREFIXO) ====================
+# ========= COMANDOS ======================================
 # =========================================================
 
 @bot.hybrid_command(name="painel4faixaadmin", description="Painel administrativo do bot 4FAIXA Seeven")
@@ -1696,7 +1675,7 @@ async def painel4faixaadmin(ctx):
         description=("Bem-vindo ao painel de configuração do bot.\n"
                      "Use os botões abaixo para configurar canais, cargos, produtos, criar painéis, "
                      "gerenciar backups e visualizar estatísticas.\n\n"
-                     "**Tudo é salvo automaticamente no banco de dados.**"),
+                     "**Tudo é salvo automaticamente em `config_bot.json`.**"),
         color=0x2c2f33, timestamp=datetime.now()
     )
     embed.add_field(name="📢 Canais", value="Configura onde logs/rankings/registros serão enviados.", inline=True)
@@ -1706,17 +1685,14 @@ async def painel4faixaadmin(ctx):
     embed.set_footer(text=f"Servidor: {ctx.guild.name} | ID: {ctx.guild.id}")
     await ctx.send(embed=embed, view=AdminPanelView(ctx.guild.id))
 
-@bot.hybrid_command(name="reload_config", description="Recarrega configurações e assinaturas do banco")
+@bot.hybrid_command(name="reload_config", description="Recarrega configurações do disco")
 @commands.has_permissions(administrator=True)
-@require_active_subscription()
 async def reload_config(ctx):
     await load_all_settings()
-    await update_active_guilds()
-    await ctx.send("✅ Configurações e assinaturas recarregadas!")
+    await ctx.send("✅ Configurações recarregadas!")
 
 @bot.hybrid_command(name="criar_paineis", description="Recria todos os painéis do servidor")
 @commands.has_permissions(administrator=True)
-@require_active_subscription()
 async def criar_paineis(ctx):
     settings = bot.guild_settings.get(ctx.guild.id, {})
     if not settings:
@@ -1726,19 +1702,18 @@ async def criar_paineis(ctx):
 
 @bot.hybrid_command(name="config", description="Mostra as configurações atuais do servidor")
 @commands.has_permissions(administrator=True)
-@require_active_subscription()
 async def show_config(ctx):
     if not is_admin(ctx.author):
         return await ctx.send("❌ Sem permissão.")
     settings = bot.guild_settings.get(ctx.guild.id, {})
+    if not settings:
+        return await ctx.send("❌ Nenhuma configuração definida ainda.")
     embed = discord.Embed(title="⚙️ Configurações do Bot", color=0x2c2f33)
     for k, v in settings.items():
-        if k == 'guild_id': continue
         embed.add_field(name=k, value=str(v) if v else "❌", inline=False)
     await ctx.send(embed=embed)
 
 @bot.hybrid_command(name="stats", description="Mostra estatísticas do servidor")
-@require_active_subscription()
 async def server_stats(ctx):
     gid = ctx.guild.id; gid_str = str(gid)
     total_usuarios = len(dados["usuarios"].get(gid_str, {}))
@@ -1753,11 +1728,9 @@ async def server_stats(ctx):
     embed.add_field(name="📦 Total de farms", value=total_farms, inline=True)
     embed.add_field(name="💰 Dinheiro sujo total", value=f"R$ {total_dinheiro_sujo:,.2f}", inline=True)
     embed.add_field(name="🔓 Canais abertos", value=total_canais, inline=True)
-    embed.add_field(name="📋 Assinatura", value="✅ Ativa" if is_guild_active(gid) else "❌ Expirada", inline=True)
     await ctx.send(embed=embed)
 
 @bot.hybrid_command(name="me", description="Mostra seu resumo pessoal")
-@require_active_subscription()
 async def my_stats(ctx):
     uid = str(ctx.author.id); gid_str = str(ctx.guild.id)
     user_data = dados["usuarios"].get(gid_str, {}).get(uid, {})
@@ -1781,7 +1754,7 @@ async def my_stats(ctx):
 
 @bot.hybrid_command(name="remover_usuario", description="Remove todos os dados de um usuário")
 @commands.has_permissions(administrator=True)
-@require_active_subscription()
+@app_commands.describe(user="Usuário a remover")
 async def remover_usuario(ctx, user: discord.User):
     if not is_admin(ctx.author):
         return await ctx.send("❌ Sem permissão.")
@@ -1790,77 +1763,10 @@ async def remover_usuario(ctx, user: discord.User):
     await log_admin(ctx.guild.id, "Usuário removido", f"{user.mention} por {ctx.author.mention}")
     await atualizar_ranking(ctx.guild.id)
 
-# ========= HEARTBEAT E SERVIDOR INTERNO =========
-async def send_heartbeat():
-    async with aiohttp.ClientSession() as session:
-        for guild in bot.guilds:
-            guild_id = str(guild.id)
-            try:
-                url = f"{API_BASE_URL}/api/heartbeat/{guild_id}"
-                headers = {"x-bot-token": BOT_INTERNAL_TOKEN}
-                async with session.post(url, headers=headers) as resp:
-                    if resp.status != 200:
-                        print(f"Heartbeat falhou para {guild_id}: {resp.status}")
-            except Exception as e:
-                print(f"Erro no heartbeat: {e}")
-
-@tasks.loop(minutes=5)
-async def heartbeat_task():
-    await send_heartbeat()
-
-app_web = web.Application()
-
-async def handle_stats(request):
-    token = request.headers.get('x-bot-token')
-    if token != BOT_INTERNAL_TOKEN:
-        return web.Response(status=401)
-    guild_id = request.match_info.get('guild_id')
-    if not guild_id:
-        return web.json_response({'error': 'guild_id required'}, status=400)
-    gid_str = str(guild_id)
-    user_data = dados.get("usuarios", {}).get(gid_str, {})
-    farms = []; dinheiro_sujo_total = 0; membros = {}
-    for uid, data in user_data.items():
-        if "removido_em" in data: continue
-        qtd_farms = len(data.get("farms", [])); dinheiro = data.get("dinheiro_sujo", 0)
-        dinheiro_sujo_total += dinheiro
-        if qtd_farms > 0 or dinheiro > 0:
-            membros[uid] = {"farms": qtd_farms, "dinheiro": dinheiro}
-            farms.extend(data.get("farms", []))
-    top_membros = sorted(membros.items(), key=lambda x: x[1]['farms'] + x[1]['dinheiro']/100, reverse=True)[:5]
-    top_membros_list = [{"user_id": uid, "farms": v['farms'], "dinheiro": v['dinheiro']} for uid, v in top_membros]
-    from datetime import timedelta
-    hoje = datetime.now().date()
-    semana = [(hoje - timedelta(days=i)).strftime('%Y-%m-%d') for i in range(6, -1, -1)]
-    atividade = {dia: 0 for dia in semana}
-    for farm in farms:
-        try:
-            data_farm = datetime.strptime(farm.get("data", ""), "%Y-%m-%d %H:%M:%S").date()
-            dia_str = data_farm.strftime('%Y-%m-%d')
-            if dia_str in atividade: atividade[dia_str] += 1
-        except: pass
-    return web.json_response({
-        "total_farms": len(farms),
-        "total_dinheiro_sujo": dinheiro_sujo_total,
-        "top_membros": top_membros_list,
-        "atividade_semanal": [{"dia": k, "farms": v} for k, v in atividade.items()],
-        "farms_recentes": farms[-10:]
-    })
-
-app_web.router.add_get('/api/internal/stats/{guild_id}', handle_stats)
-
-async def start_web_server():
-    runner = web.AppRunner(app_web)
-    await runner.setup()
-    site = web.TCPSite(runner, '0.0.0.0', 8000)
-    await site.start()
-    print("✅ Servidor HTTP interno na porta 8000")
-
 # ========= EVENTOS =========
 @bot.event
 async def on_member_remove(member):
     gid = member.guild.id
-    if not is_guild_active(gid): return
     await limpar_logs_usuario(gid, member.id, member.name)
     if str(gid) in dados["canais"] and str(member.id) in dados["canais"][str(gid)]:
         canal = member.guild.get_channel(dados["canais"][str(gid)][str(member.id)])
@@ -1873,37 +1779,23 @@ async def on_member_remove(member):
 @bot.event
 async def on_guild_join(guild):
     print(f"Adicionado ao servidor: {guild.name} ({guild.id})")
-    try:
-        conn = await asyncpg.connect(DATABASE_URL)
-        row = await conn.fetchrow(
-            "SELECT user_email FROM bot_subscriptions WHERE guild_id = $1 AND status = 'pending_activation'",
-            str(guild.id))
-        if row:
-            await conn.execute("UPDATE bot_subscriptions SET status = 'active', updated_at = NOW() WHERE guild_id = $1", str(guild.id))
-            channel = guild.system_channel or (guild.text_channels[0] if guild.text_channels else None)
-            if channel:
-                await channel.send("🎉 **Assinatura ativada!** Use `/painel4faixaadmin` para configurar.")
-        await conn.close()
-    except Exception as e:
-        print(f"Erro on_guild_join: {e}")
+    channel = guild.system_channel or (guild.text_channels[0] if guild.text_channels else None)
+    if channel:
+        try:
+            await channel.send("🎉 **Bot adicionado!** Use `/painel4faixaadmin` para configurar tudo.")
+        except: pass
 
 @bot.event
 async def on_ready():
     print(f"✅ Bot {bot.user} online!")
     await load_all_settings()
-    await update_active_guilds()
-    check_reload_requests.start()
-    check_expired_subscriptions.start()
-    heartbeat_task.start()
-    asyncio.create_task(start_web_server())
-    # Sincronizar slash commands
     try:
         synced = await bot.tree.sync()
         print(f"✅ {len(synced)} slash commands sincronizados.")
     except Exception as e:
         print(f"❌ Erro ao sincronizar comandos: {e}")
     for guild in bot.guilds:
-        if guild.id in bot.guild_settings and is_guild_active(guild.id):
+        if guild.id in bot.guild_settings:
             await atualizar_ranking(guild.id)
     print("✅ Bot pronto.")
 
