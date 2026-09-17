@@ -7,7 +7,6 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 COPY bot.py .
 
-# Pasta persistente para dados_bot.json, config_bot.json e backups
 RUN mkdir -p /app/data
 
 CMD ["python", "bot.py"]
