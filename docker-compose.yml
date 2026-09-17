@@ -4,7 +4,7 @@ services:
   bot:
     build:
       context: .
-      dockerfile: Dockerfile
+      dockerfile: Dockerfile.txt
     container_name: bot_4faixa
     restart: unless-stopped
     environment:
