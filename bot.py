@@ -2377,4 +2377,144 @@ async def painel4faixaadmin(ctx):
 @commands.has_permissions(administrator=True)
 async def reload_config(ctx):
     await load_all_settings()
-    await ctx.send("
+    await ctx.send("✅ Configurações recarregadas!")
+
+@bot.hybrid_command(name="criar_paineis", description="Recria todos os painéis do servidor")
+@commands.has_permissions(administrator=True)
+async def criar_paineis(ctx):
+    settings = bot.guild_settings.get(ctx.guild.id, {})
+    if not settings:
+        await ctx.send("❌ Nenhuma configuração. Use `/painel4faixaadmin`."); return
+    resultado = await criar_todos_paineis(ctx.guild, settings)
+    await ctx.send(resultado)
+
+@bot.hybrid_command(name="config", description="Mostra as configurações atuais do servidor")
+@commands.has_permissions(administrator=True)
+async def show_config(ctx):
+    if not is_admin(ctx.author):
+        return await ctx.send("❌ Sem permissão.")
+    settings = bot.guild_settings.get(ctx.guild.id, {})
+    if not settings:
+        return await ctx.send("❌ Nenhuma configuração definida ainda.")
+    layout = LayoutView()
+    c = Container(accent_color=0x2C2F33)
+    c.add_item(TextDisplay("# ⚙️ Configurações do Bot"))
+    c.add_item(Separator())
+    for k, v in settings.items():
+        if k == 'guild_id': continue
+        c.add_item(TextDisplay(f"**{k}:** `{str(v) if v else '❌'}`"))
+    layout.add_item(c)
+    await ctx.send(view=layout)
+
+@bot.hybrid_command(name="stats", description="Mostra estatísticas do servidor")
+async def server_stats(ctx):
+    gid = ctx.guild.id; gid_str = str(gid)
+    total_usuarios = len(dados["usuarios"].get(gid_str, {}))
+    total_farms = 0; total_ds = 0.0
+    total_canais = len(dados["canais"].get(gid_str, {}))
+    for uid, data in dados["usuarios"].get(gid_str, {}).items():
+        if "removido_em" in data: continue
+        total_farms += len(data.get("farms", []))
+        total_ds += data.get("dinheiro_sujo", 0)
+    layout = LayoutView()
+    c = Container(accent_color=0x2C2F33)
+    c.add_item(TextDisplay("# 📊 Estatísticas do Servidor"))
+    c.add_item(Separator())
+    c.add_item(TextDisplay(
+        f"👥 Usuários com farms: **{total_usuarios}**\n"
+        f"📦 Total de farms: **{total_farms}**\n"
+        f"💰 Dinheiro sujo total: **R$ {total_ds:,.2f}**\n"
+        f"🔓 Canais abertos: **{total_canais}**"
+    ))
+    layout.add_item(c)
+    await ctx.send(view=layout)
+
+@bot.hybrid_command(name="me", description="Mostra seu resumo pessoal")
+async def my_stats(ctx):
+    uid = str(ctx.author.id); gid_str = str(ctx.guild.id)
+    user_data = dados["usuarios"].get(gid_str, {}).get(uid, {})
+    if not user_data:
+        await ctx.send("ℹ️ Você ainda não possui registros."); return
+    farms = user_data.get("farms", [])
+    trans = user_data.get("transacoes_dinheiro_sujo", [])
+    pagamentos = user_data.get("pagamentos", [])
+    total_ds = user_data.get("dinheiro_sujo", 0)
+    total_recebido = sum(p["valor"] for p in pagamentos)
+
+    layout = LayoutView()
+    c = Container(accent_color=0x2C2F33)
+    c.add_item(TextDisplay(f"# 👤 Resumo de {ctx.author.display_name}"))
+    c.add_item(Separator())
+    c.add_item(TextDisplay(
+        f"📦 Farms registrados: **{len(farms)}**\n"
+        f"💰 Dinheiro sujo atual: **R$ {total_ds:,.2f}**\n"
+        f"💵 Total recebido: **R$ {total_recebido:,.2f}**\n"
+        f"📊 Transações de DS: **{len(trans)}**\n"
+        f"📋 Pagamentos recebidos: **{len(pagamentos)}**"
+    ))
+    if farms:
+        ultimo = farms[-1]
+        data = datetime.strptime(ultimo["data"], "%Y-%m-%d %H:%M:%S").strftime("%d/%m/%Y %H:%M")
+        prods = ", ".join(f"{p['produto']}:{p['quantidade']}" for p in ultimo["produtos"])
+        c.add_item(Separator())
+        c.add_item(TextDisplay(f"📌 **Último farm**\n{data} — {prods}"))
+    layout.add_item(c)
+    await ctx.send(view=layout)
+
+@bot.hybrid_command(name="remover_usuario", description="Remove todos os dados de um usuário")
+@commands.has_permissions(administrator=True)
+@app_commands.describe(user="Usuário a remover")
+async def remover_usuario(ctx, user: discord.User):
+    if not is_admin(ctx.author):
+        return await ctx.send("❌ Sem permissão.")
+    total = await limpar_logs_usuario(ctx.guild.id, user.id, user.name)
+    await ctx.send(f"✅ {user.mention} removido. {total} mensagens limpas.")
+    await log_admin(ctx.guild.id, "Usuário removido", f"{user.mention} por {ctx.author.mention}")
+    await atualizar_ranking(ctx.guild.id)
+
+# ====================================================================
+# ==================== EVENTOS =======================================
+# ====================================================================
+
+@bot.event
+async def on_member_remove(member):
+    gid = member.guild.id
+    await limpar_logs_usuario(gid, member.id, member.name)
+    if str(gid) in dados["canais"] and str(member.id) in dados["canais"][str(gid)]:
+        canal = member.guild.get_channel(dados["canais"][str(gid)][str(member.id)])
+        if canal:
+            try: await canal.delete(reason="Usuário saiu")
+            except: pass
+        del dados["canais"][str(gid)][str(member.id)]
+        salvar_dados()
+
+@bot.event
+async def on_guild_join(guild):
+    print(f"Adicionado ao servidor: {guild.name} ({guild.id})")
+    channel = guild.system_channel or (guild.text_channels[0] if guild.text_channels else None)
+    if channel:
+        try:
+            layout = LayoutView()
+            c = Container(accent_color=0x2C2F33)
+            c.add_item(TextDisplay("🎉 **Bot adicionado!** Use `/painel4faixaadmin` para configurar tudo."))
+            layout.add_item(c)
+            await channel.send(view=layout)
+        except: pass
+
+@bot.event
+async def on_ready():
+    print(f"✅ Bot {bot.user} online!")
+    await load_all_settings()
+    try:
+        synced = await bot.tree.sync()
+        print(f"✅ {len(synced)} slash commands sincronizados.")
+    except Exception as e:
+        print(f"❌ Erro ao sincronizar comandos: {e}")
+    for guild in bot.guilds:
+        if guild.id in bot.guild_settings:
+            await atualizar_ranking(guild.id)
+    print("✅ Bot pronto.")
+
+if __name__ == "__main__":
+    carregar_dados()
+    bot.run(TOKEN)
