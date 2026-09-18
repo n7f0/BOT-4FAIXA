@@ -26,7 +26,11 @@ DADOS_FILE = os.path.join(DATA_DIR, "dados_bot.json")
 CONFIG_FILE = os.path.join(DATA_DIR, "config_bot.json")
 
 # ==================== CATÁLOGO DE CONFIGURAÇÕES ====================
+# Categorias: channel | role | produto | texto | sistema
+# - role  → RoleSelect multi-seleção (aceita VÁRIOS cargos)
+# - produto / texto / sistema → Modal de texto
 SETTINGS_CONFIG = {
+    # --- Canais ---
     'canal_logs_id':              ('📋 Canal de Logs',                      'channel'),
     'canal_admin_logs_id':        ('🛡️ Canal de Logs Admin',               'channel'),
     'canal_rank_id':              ('🏆 Canal de Ranking',                   'channel'),
@@ -40,11 +44,13 @@ SETTINGS_CONFIG = {
     'canal_registros_set_id':     ('📁 Canal Registros SET',                'channel'),
     'canal_painel_privado_id':    ('🔓 Canal Painel Criar Privado',         'channel'),
     'categoria_farms_id':         ('📂 Categoria dos Canais de Farm',       'channel'),
-    'cargo_00_id':                ('👑 Cargo Administrador',                'role'),
-    'cargo_membro_id':            ('👤 Cargo Membro',                       'role'),
-    'cargo_aprovar_set_id':       ('✅ Cargo Aprovar SET',                  'role'),
-    'cargos_compra_venda_ids':    ('💸 Cargos Compra/Venda (IDs, vírgula)', 'texto'),
-    'cargos_registrar_acao_ids':  ('⚔️ Cargos Registrar Ação (IDs, vírgula)','texto'),
+    # --- Cargos (multi-seleção) ---
+    'cargo_00_id':                ('👑 Cargos de Administrador',            'role'),
+    'cargo_membro_id':            ('👤 Cargos de Membro',                   'role'),
+    'cargo_aprovar_set_id':       ('✅ Cargos Aprovar SET',                 'role'),
+    'cargos_compra_venda_ids':    ('💸 Cargos Compra/Venda',                'role'),
+    'cargos_registrar_acao_ids':  ('⚔️ Cargos Registrar Ação',              'role'),
+    # --- Produtos ---
     'nome_produto1':              ('📦 Nome Produto 1',                     'produto'),
     'nome_produto2':              ('📦 Nome Produto 2',                     'produto'),
     'nome_produto3':              ('📦 Nome Produto 3',                     'produto'),
@@ -58,6 +64,7 @@ SETTINGS_CONFIG = {
     'valor_produto1_por_unidade': ('💰 Valor Unitário Produto 1 (R$)',      'produto'),
     'valor_produto2_por_unidade': ('💰 Valor Unitário Produto 2 (R$)',      'produto'),
     'valor_produto3_por_unidade': ('💰 Valor Unitário Produto 3 (R$)',      'produto'),
+    # --- Sistema (taxas) ---
     'taxa_lavagem':               ('💧 Taxa de Lavagem (%)',                'sistema'),
     'taxa_faccao':                ('⚔️ Taxa da Facção (%)',                 'sistema'),
     'taxa_membro':                ('👤 Taxa do Membro (%)',                 'sistema'),
@@ -183,6 +190,15 @@ def get_taxa(gid, key, default_pct):
     except:
         return default_pct
 
+def _parse_ids(val):
+    """Converte '123,456,789' em [123, 456, 789]."""
+    if not val:
+        return []
+    try:
+        return [int(x.strip()) for x in str(val).split(',') if x.strip().isdigit()]
+    except:
+        return []
+
 async def get_configured_channel(gid, key):
     cid = get_guild_setting(gid, key)
     if not cid:
@@ -192,16 +208,15 @@ async def get_configured_channel(gid, key):
     except:
         return None
 
-# ==================== HELPER: enviar texto puro via LayoutView ====================
+# ==================== HELPER: layout de texto simples ====================
 def _text_layout(text: str, accent: int = 0x5865F2) -> LayoutView:
-    """Cria um LayoutView simples com um único texto — útil para avisos."""
     layout = LayoutView()
     c = Container(accent_color=accent)
     c.add_item(TextDisplay(text))
     layout.add_item(c)
     return layout
 
-# ==================== PERMISSÕES ====================
+# ==================== PERMISSÕES (multi-cargo) ====================
 def tem_cargo(member, cargos_ids):
     for cid in cargos_ids:
         cargo = member.guild.get_role(cid)
@@ -210,50 +225,33 @@ def tem_cargo(member, cargos_ids):
     return False
 
 def is_admin(member):
-    cid = get_guild_setting(member.guild.id, 'cargo_00_id')
-    if cid:
-        try:
-            if tem_cargo(member, [int(cid)]):
-                return True
-        except:
-            pass
+    ids = _parse_ids(get_guild_setting(member.guild.id, 'cargo_00_id'))
+    if ids and tem_cargo(member, ids):
+        return True
     return member.guild_permissions.administrator
 
 def is_membro(member):
-    cid = get_guild_setting(member.guild.id, 'cargo_membro_id')
-    if cid:
-        try:
-            return tem_cargo(member, [int(cid)])
-        except:
-            return False
+    ids = _parse_ids(get_guild_setting(member.guild.id, 'cargo_membro_id'))
+    if ids:
+        return tem_cargo(member, ids)
     return False
 
 def pode_comprar_vender(member):
-    ids_str = get_guild_setting(member.guild.id, 'cargos_compra_venda_ids')
-    if ids_str:
-        ids = [int(x.strip()) for x in str(ids_str).split(',') if x.strip().isdigit()]
-        if ids:
-            return tem_cargo(member, ids)
+    ids = _parse_ids(get_guild_setting(member.guild.id, 'cargos_compra_venda_ids'))
+    if ids:
+        return tem_cargo(member, ids)
     return False
 
 def pode_registrar_acao(member):
-    ids_str = get_guild_setting(member.guild.id, 'cargos_registrar_acao_ids')
-    if ids_str:
-        ids = [int(x.strip()) for x in str(ids_str).split(',') if x.strip().isdigit()]
-        if ids:
-            return tem_cargo(member, ids)
+    ids = _parse_ids(get_guild_setting(member.guild.id, 'cargos_registrar_acao_ids'))
+    if ids:
+        return tem_cargo(member, ids)
     return False
 
 def pode_aprovar_set(member):
-    admin = get_guild_setting(member.guild.id, 'cargo_00_id')
-    set_cargo = get_guild_setting(member.guild.id, 'cargo_aprovar_set_id')
-    cargos = []
-    if admin:
-        try: cargos.append(int(admin))
-        except: pass
-    if set_cargo:
-        try: cargos.append(int(set_cargo))
-        except: pass
+    admin_ids = _parse_ids(get_guild_setting(member.guild.id, 'cargo_00_id'))
+    set_ids = _parse_ids(get_guild_setting(member.guild.id, 'cargo_aprovar_set_id'))
+    cargos = admin_ids + set_ids
     if cargos:
         return tem_cargo(member, cargos)
     return False
@@ -336,26 +334,76 @@ class ChannelEditView(LayoutView):
         else:
             await interaction.response.send_message("❌ Erro ao salvar.", ephemeral=True)
 
+# ==================== ROLE EDIT (MULTI-SELEÇÃO) ====================
 class RoleEditView(LayoutView):
-    def __init__(self, gid, key, label):
-        super().__init__(timeout=180)
+    """RoleSelect com múltipla seleção (0 a 25 cargos).
+    Se salvar vazio, remove a configuração."""
+
+    def __init__(self, gid, key, label, guild: discord.Guild):
+        super().__init__(timeout=300)
         self.gid = gid; self.key = key; self.label_txt = label
+        self.guild = guild
+
+        # Pré-seleciona cargos já configurados
+        current_ids = _parse_ids(bot.guild_settings.get(gid, {}).get(key))
+        default_roles = []
+        for rid in current_ids:
+            role = guild.get_role(rid)
+            if role:
+                default_roles.append(role)
+
         c = Container(accent_color=0x5865F2)
-        c.add_item(TextDisplay(f"👥 **Selecione o novo cargo para:**\n`{label}`"))
+        c.add_item(TextDisplay(
+            f"👥 **Configurar cargos para:**\n`{label}`\n\n"
+            f"• Selecione **um ou mais** cargos\n"
+            f"• Envie **vazio** para limpar a configuração"
+        ))
         c.add_item(Separator())
-        sel = RoleSelect(placeholder="Selecione o cargo...")
+
+        sel = RoleSelect(
+            placeholder="Selecione um ou mais cargos...",
+            min_values=0,       # permite limpar
+            max_values=25,
+            default_values=default_roles if default_roles else []
+        )
         sel.callback = self._cb
         c.add_item(ActionRow(sel))
+
+        # Resumo
+        if default_roles:
+            c.add_item(TextDisplay(
+                f"**Atualmente configurados ({len(default_roles)}):** "
+                + " ".join(r.mention for r in default_roles)
+            ))
+        else:
+            c.add_item(TextDisplay("**Atualmente:** ❌ Nenhum cargo configurado"))
+
         self.add_item(c)
+
     async def _cb(self, interaction):
         if not is_admin(interaction.user):
             await interaction.response.send_message("❌ Sem permissão.", ephemeral=True); return
-        role_id = interaction.data["values"][0]
-        ok = await save_setting(self.gid, self.key, str(role_id))
-        if ok:
-            await interaction.response.send_message(f"✅ **{self.label_txt}** → <@&{role_id}>", ephemeral=True)
-        else:
-            await interaction.response.send_message("❌ Erro ao salvar.", ephemeral=True)
+        values = interaction.data.get("values") or []
+
+        if not values:
+            # Limpar
+            ok = await save_setting(self.gid, self.key, "")
+            if ok:
+                await interaction.response.send_message(
+                    f"🗑️ **{self.label_txt}** limpo (nenhum cargo).", ephemeral=True)
+            else:
+                await interaction.response.send_message("❌ Erro ao limpar.", ephemeral=True)
+            return
+
+        # Salva como string CSV
+        csv = ",".join(str(v) for v in values)
+        ok = await save_setting(self.gid, self.key, csv)
+        if not ok:
+            await interaction.response.send_message("❌ Erro ao salvar.", ephemeral=True); return
+
+        mencoes = " ".join(f"<@&{v}>" for v in values)
+        await interaction.response.send_message(
+            f"✅ **{self.label_txt}** → {len(values)} cargo(s):\n{mencoes}", ephemeral=True)
 
 # ==================== CONFIRMAÇÕES ====================
 class ConfirmResetSemanalView(LayoutView):
@@ -590,7 +638,6 @@ class RankingView(LayoutView):
         if not is_admin(interaction.user):
             await interaction.response.send_message("❌ Apenas administradores.", ephemeral=True); return
         view = ConfirmarResetView(interaction.guild.id)
-        # ✅ FIX: send só view, sem content
         await interaction.response.send_message(view=view, ephemeral=True)
 
 async def atualizar_ranking(gid):
@@ -695,7 +742,7 @@ async def atualizar_ranking(gid):
         if not is_admin(inter.user):
             await inter.response.send_message("❌ Apenas administradores.", ephemeral=True); return
         v = ConfirmarResetView(gid)
-        await inter.response.send_message(view=v, ephemeral=True)  # ✅ FIX
+        await inter.response.send_message(view=v, ephemeral=True)
     b1.callback = at; b2.callback = rs
     row.add_item(b1); row.add_item(b2)
     c.add_item(row)
@@ -747,9 +794,9 @@ class BotaoCriarCanalView(LayoutView):
             interaction.user: discord.PermissionOverwrite(read_messages=True, send_messages=True, attach_files=True, embed_links=True),
             interaction.guild.me: discord.PermissionOverwrite(read_messages=True, send_messages=True, manage_channels=True)
         }
-        admin_cargo = get_guild_setting(gid, 'cargo_00_id')
-        if admin_cargo:
-            cargo = interaction.guild.get_role(int(admin_cargo))
+        # Adiciona TODOS os cargos admin configurados
+        for rid in _parse_ids(get_guild_setting(gid, 'cargo_00_id')):
+            cargo = interaction.guild.get_role(rid)
             if cargo:
                 overwrites[cargo] = discord.PermissionOverwrite(read_messages=True, send_messages=True, manage_channels=True)
         nome = f"farm-{interaction.user.name}".lower().replace(" ", "-")[:90]
@@ -841,7 +888,6 @@ class FarmChannelView(LayoutView):
         if interaction.user.id != self.user_id and not is_admin(interaction.user):
             await interaction.response.send_message("❌ Sem permissão.", ephemeral=True); return
         view = EscolherTipoEdicaoView(self.gid, self.user_id, self.user_name)
-        # ✅ FIX: o texto já está dentro do EscolherTipoEdicaoView; enviar só view
         await interaction.response.send_message(view=view, ephemeral=True)
 
     async def cb_fechar_caixa(self, interaction):
@@ -1653,7 +1699,6 @@ class SolicitarSetModal(Modal, title="Solicitar SET"):
         await interaction.response.defer(ephemeral=True, thinking=True)
         self.nome_val = self.nome.value; self.id_val = self.id_jogo.value; self.tell_val = self.tell.value
         view = RecrutadorSelectView(self)
-        # ✅ FIX: o texto já está dentro do RecrutadorSelectView; enviar só view
         await interaction.followup.send(view=view, ephemeral=True)
 
 class RecrutadorSelectView(LayoutView):
@@ -1719,7 +1764,6 @@ class AprovarSetView(View):
         if not pedido or pedido["status"] != "pendente":
             await interaction.response.send_message("❌ Pedido já processado.", ephemeral=True); return
         view = EscolherCargoView(self.gid, self.pid, self.sol_id)
-        # ✅ FIX: texto já está dentro da EscolherCargoView
         await interaction.response.send_message(view=view, ephemeral=True)
     async def _recusar(self, interaction):
         if not pode_aprovar_set(interaction.user):
@@ -1736,23 +1780,34 @@ class AprovarSetView(View):
         except: pass
 
 class EscolherCargoView(LayoutView):
+    """Para aprovar SET, mostra TODOS os cargos configurados como 'cargo_membro_id'."""
     def __init__(self, gid, pid, sol_id):
         super().__init__(timeout=120)
         self.gid = gid; self.pid = pid; self.sol_id = sol_id
-        cargo_id = get_guild_setting(gid, 'cargo_membro_id')
-        opts = [discord.SelectOption(label="Membro", value=str(cargo_id))] if cargo_id else \
-               [discord.SelectOption(label="Erro: cargo não configurado", value="none")]
+
+        membro_ids = _parse_ids(get_guild_setting(gid, 'cargo_membro_id'))
+        opts = []
+        for rid in membro_ids:
+            role = None
+            # Não temos guild aqui; placeholder — busca no cache via bot
+            role = bot.get_guild(gid).get_role(rid) if bot.get_guild(gid) else None
+            nome = role.name if role else f"ID {rid}"
+            opts.append(discord.SelectOption(label=nome[:80], value=str(rid)))
+        if not opts:
+            opts = [discord.SelectOption(label="Erro: nenhum cargo configurado", value="none")]
+
         c = Container(accent_color=0x2C2F33)
         c.add_item(TextDisplay("🎯 **Escolha o cargo a atribuir**"))
         c.add_item(Separator())
-        sel = Select(placeholder="Cargo", options=opts)
+        sel = Select(placeholder="Cargo", options=opts[:25])
         sel.callback = self._cb
         c.add_item(ActionRow(sel))
         self.add_item(c)
     async def _cb(self, interaction):
-        if self.children[0].children[0].values[0] == "none":
+        valor = self.children[0].children[0].values[0]
+        if valor == "none":
             await interaction.response.send_message("❌ Cargo não configurado.", ephemeral=True); return
-        cargo_id = int(self.children[0].children[0].values[0])
+        cargo_id = int(valor)
         guild = interaction.guild
         membro = guild.get_member(self.sol_id)
         if not membro:
@@ -1841,7 +1896,6 @@ class BackupView(LayoutView):
         if not backups:
             await interaction.followup.send("ℹ️ Nenhum backup encontrado.", ephemeral=True); return
         view = RecarregarBackupView(interaction.guild.id, backups)
-        # ✅ FIX: texto já está dentro do RecarregarBackupView
         await interaction.followup.send(view=view, ephemeral=True)
 
 class RecarregarBackupView(LayoutView):
@@ -1889,14 +1943,11 @@ class RecarregarBackupView(LayoutView):
 # ====================================================================
 
 class AdminPanelView(LayoutView):
-    """Painel administrativo com navegação por Select Menus."""
-
     def __init__(self, gid):
         super().__init__(timeout=900)
         self.gid = gid
         self._build_main()
 
-    # ---------- NAVEGAÇÃO ----------
     def _clear_and_build(self, builder):
         self.clear_items()
         builder()
@@ -1922,7 +1973,7 @@ class AdminPanelView(LayoutView):
                 discord.SelectOption(label="Canais", value="canais", emoji="📢",
                                      description="Configure logs, ranking, painéis e registros"),
                 discord.SelectOption(label="Cargos", value="cargos", emoji="👥",
-                                     description="Admin, membro, aprovador de SET"),
+                                     description="Admin, membro, aprovador de SET, compra/venda, ação"),
                 discord.SelectOption(label="Produtos", value="produtos", emoji="📦",
                                      description="Nomes e valores dos produtos farmados"),
                 discord.SelectOption(label="Sistema", value="sistema", emoji="⚙️",
@@ -1941,7 +1992,7 @@ class AdminPanelView(LayoutView):
         c.add_item(ActionRow(select))
         self.add_item(c)
 
-    async def _on_main_select(self, interaction: discord.Interaction):
+    async def _on_main_select(self, interaction):
         v = interaction.data["values"][0]
         handlers = {
             "canais": self._build_canais,
@@ -1955,12 +2006,11 @@ class AdminPanelView(LayoutView):
         }
         builder = handlers.get(v)
         if not builder:
-            await interaction.response.defer()
-            return
+            await interaction.response.defer(); return
         self._clear_and_build(builder)
         await interaction.response.edit_message(view=self)
 
-    async def _on_back(self, interaction: discord.Interaction):
+    async def _on_back(self, interaction):
         self._clear_and_build(self._build_main)
         await interaction.response.edit_message(view=self)
 
@@ -2000,22 +2050,27 @@ class AdminPanelView(LayoutView):
         key = interaction.data["values"][0]
         label = SETTINGS_CONFIG[key][0]
         view = ChannelEditView(self.gid, key, label)
-        # ✅ FIX: enviar só a view (o texto já está dentro do ChannelEditView)
         await interaction.response.send_message(view=view, ephemeral=True)
 
     # ---------- 👥 CARGOS ----------
     def _build_cargos(self):
         c = self._header("👥 Configuração de Cargos",
-                         "Escolha qual cargo deseja mapear.")
+                         "Escolha qual cargo deseja configurar (multi-seleção).")
         options = []
         for key, (label, cat) in SETTINGS_CONFIG.items():
             if cat != 'role':
                 continue
             current = bot.guild_settings.get(self.gid, {}).get(key)
-            desc = f"✅ Cargo: {current}" if current and str(current).isdigit() else "❌ Não configurado"
+            ids = _parse_ids(current)
+            if not ids:
+                desc = "❌ Não configurado"
+            elif len(ids) == 1:
+                desc = f"✅ 1 cargo"
+            else:
+                desc = f"✅ {len(ids)} cargos"
             options.append(discord.SelectOption(label=label[:80], value=key, description=desc[:100]))
         if options:
-            sel = Select(placeholder="👥 Escolha um cargo...", options=options[:25])
+            sel = Select(placeholder="👥 Escolha um cargo/lista...", options=options[:25])
             sel.callback = self._on_setting_select_role
             c.add_item(ActionRow(sel))
         self._add_back_row(c)
@@ -2024,37 +2079,24 @@ class AdminPanelView(LayoutView):
     async def _on_setting_select_role(self, interaction):
         key = interaction.data["values"][0]
         label = SETTINGS_CONFIG[key][0]
-        view = RoleEditView(self.gid, key, label)
-        # ✅ FIX: enviar só a view
+        view = RoleEditView(self.gid, key, label, interaction.guild)
         await interaction.response.send_message(view=view, ephemeral=True)
 
     # ---------- 📦 PRODUTOS ----------
     def _build_produtos(self):
         c = self._header("📦 Configuração de Produtos",
-                         "Nomes, valores unitários e IDs de cargos especiais.")
-        opt_prod = []
+                         "Nomes e valores unitários dos produtos.")
+        options = []
         for key, (label, cat) in SETTINGS_CONFIG.items():
             if cat != 'produto':
                 continue
             current = bot.guild_settings.get(self.gid, {}).get(key)
             desc = f"✅ {str(current)[:60]}" if current else "❌ Não configurado"
-            opt_prod.append(discord.SelectOption(label=label[:80], value=key, description=desc[:100]))
-        if opt_prod:
-            sel = Select(placeholder="📦 Produtos (nomes e valores)...", options=opt_prod[:25])
+            options.append(discord.SelectOption(label=label[:80], value=key, description=desc[:100]))
+        if options:
+            sel = Select(placeholder="📦 Escolha um produto/campo...", options=options[:25])
             sel.callback = self._on_setting_select_produto
             c.add_item(ActionRow(sel))
-        c.add_item(Separator())
-        opt_txt = []
-        for key, (label, cat) in SETTINGS_CONFIG.items():
-            if cat != 'texto':
-                continue
-            current = bot.guild_settings.get(self.gid, {}).get(key)
-            desc = f"✅ {str(current)[:60]}" if current else "❌ Não configurado"
-            opt_txt.append(discord.SelectOption(label=label[:80], value=key, description=desc[:100]))
-        if opt_txt:
-            sel2 = Select(placeholder="🎫 IDs de cargos (vírgula)...", options=opt_txt[:25])
-            sel2.callback = self._on_setting_select_produto
-            c.add_item(ActionRow(sel2))
         self._add_back_row(c)
         self.add_item(c)
 
@@ -2109,7 +2151,6 @@ class AdminPanelView(LayoutView):
             "• **Atualizar ranking** — força a atualização do ranking"
         ))
         c.add_item(Separator())
-
         row = ActionRow()
         b1 = Button(label="Publicar / Atualizar", style=discord.ButtonStyle.success, emoji="🎛️")
         b2 = Button(label="Limpar Painéis", style=discord.ButtonStyle.danger, emoji="🧹")
@@ -2160,7 +2201,6 @@ class AdminPanelView(LayoutView):
         arquivos = sorted(glob.glob(os.path.join(DATA_DIR, f"backup_{self.gid}_*.json")), reverse=True)
         c.add_item(TextDisplay(f"**Backups disponíveis:** `{len(arquivos)}`"))
         c.add_item(Separator())
-
         row = ActionRow()
         b1 = Button(label="Criar Backup", style=discord.ButtonStyle.success, emoji="💾")
         b2 = Button(label="Listar / Restaurar", style=discord.ButtonStyle.primary, emoji="📂")
@@ -2184,7 +2224,6 @@ class AdminPanelView(LayoutView):
         if not backups:
             await interaction.followup.send("ℹ️ Nenhum backup encontrado.", ephemeral=True); return
         view = RecarregarBackupView(self.gid, backups)
-        # ✅ FIX: enviar só a view
         await interaction.followup.send(view=view, ephemeral=True)
 
     async def _backup_delete_all(self, interaction):
@@ -2263,7 +2302,6 @@ class AdminPanelView(LayoutView):
 
     async def _mnt_reset(self, interaction):
         view = ConfirmarResetView(self.gid)
-        # ✅ FIX: enviar só a view
         await interaction.response.send_message(view=view, ephemeral=True)
 
     async def _mnt_sync(self, interaction):
