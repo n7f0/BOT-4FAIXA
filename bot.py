@@ -27,7 +27,6 @@ CONFIG_FILE = os.path.join(DATA_DIR, "config_bot.json")
 
 # ==================== CATÁLOGO DE CONFIGURAÇÕES ====================
 SETTINGS_CONFIG = {
-    # --- Canais ---
     'canal_logs_id':              ('📋 Canal de Logs',                      'channel'),
     'canal_admin_logs_id':        ('🛡️ Canal de Logs Admin',               'channel'),
     'canal_rank_id':              ('🏆 Canal de Ranking',                   'channel'),
@@ -41,14 +40,11 @@ SETTINGS_CONFIG = {
     'canal_registros_set_id':     ('📁 Canal Registros SET',                'channel'),
     'canal_painel_privado_id':    ('🔓 Canal Painel Criar Privado',         'channel'),
     'categoria_farms_id':         ('📂 Categoria dos Canais de Farm',       'channel'),
-    # --- Cargos ---
     'cargo_00_id':                ('👑 Cargo Administrador',                'role'),
     'cargo_membro_id':            ('👤 Cargo Membro',                       'role'),
     'cargo_aprovar_set_id':       ('✅ Cargo Aprovar SET',                  'role'),
-    # --- Cargos múltiplos (texto) ---
     'cargos_compra_venda_ids':    ('💸 Cargos Compra/Venda (IDs, vírgula)', 'texto'),
     'cargos_registrar_acao_ids':  ('⚔️ Cargos Registrar Ação (IDs, vírgula)','texto'),
-    # --- Produtos (nomes) ---
     'nome_produto1':              ('📦 Nome Produto 1',                     'produto'),
     'nome_produto2':              ('📦 Nome Produto 2',                     'produto'),
     'nome_produto3':              ('📦 Nome Produto 3',                     'produto'),
@@ -59,11 +55,9 @@ SETTINGS_CONFIG = {
     'produto8_nome':              ('📦 Nome Produto 8',                     'produto'),
     'produto9_nome':              ('📦 Nome Produto 9',                     'produto'),
     'produto10_nome':             ('📦 Nome Produto 10',                    'produto'),
-    # --- Produtos (valores) ---
     'valor_produto1_por_unidade': ('💰 Valor Unitário Produto 1 (R$)',      'produto'),
     'valor_produto2_por_unidade': ('💰 Valor Unitário Produto 2 (R$)',      'produto'),
     'valor_produto3_por_unidade': ('💰 Valor Unitário Produto 3 (R$)',      'produto'),
-    # --- Sistema (taxas) ---
     'taxa_lavagem':               ('💧 Taxa de Lavagem (%)',                'sistema'),
     'taxa_faccao':                ('⚔️ Taxa da Facção (%)',                 'sistema'),
     'taxa_membro':                ('👤 Taxa do Membro (%)',                 'sistema'),
@@ -128,7 +122,6 @@ class MeuBot(commands.Bot):
         self.guild_settings = {}
 
     async def setup_hook(self):
-        # Views persistentes (com custom_id)
         self.add_view(CompraVendaView())
         self.add_view(ActionPanelView())
         self.add_view(BackupView())
@@ -139,7 +132,7 @@ class MeuBot(commands.Bot):
 
 bot = MeuBot()
 
-# ==================== ASSINATURA (SEMPRE ATIVA) ====================
+# ==================== ASSINATURA ====================
 def is_guild_active(gid: int) -> bool:
     return True
 
@@ -182,7 +175,6 @@ def get_guild_setting(gid, key, default=None):
     return bot.guild_settings.get(gid, {}).get(key, default)
 
 def get_taxa(gid, key, default_pct):
-    """Retorna taxa como float (ex: 0.25) ou padrão se não configurado."""
     val = get_guild_setting(gid, key)
     if not val:
         return default_pct
@@ -199,6 +191,15 @@ async def get_configured_channel(gid, key):
         return bot.get_channel(int(cid))
     except:
         return None
+
+# ==================== HELPER: enviar texto puro via LayoutView ====================
+def _text_layout(text: str, accent: int = 0x5865F2) -> LayoutView:
+    """Cria um LayoutView simples com um único texto — útil para avisos."""
+    layout = LayoutView()
+    c = Container(accent_color=accent)
+    c.add_item(TextDisplay(text))
+    layout.add_item(c)
+    return layout
 
 # ==================== PERMISSÕES ====================
 def tem_cargo(member, cargos_ids):
@@ -589,6 +590,7 @@ class RankingView(LayoutView):
         if not is_admin(interaction.user):
             await interaction.response.send_message("❌ Apenas administradores.", ephemeral=True); return
         view = ConfirmarResetView(interaction.guild.id)
+        # ✅ FIX: send só view, sem content
         await interaction.response.send_message(view=view, ephemeral=True)
 
 async def atualizar_ranking(gid):
@@ -685,7 +687,6 @@ async def atualizar_ranking(gid):
     row = ActionRow()
     b1 = Button(label="Atualizar", style=discord.ButtonStyle.secondary, emoji="🔄", custom_id="rank_atualizar")
     b2 = Button(label="Resetar", style=discord.ButtonStyle.danger, emoji="⚠️", custom_id="rank_resetar")
-    # Callbacks dinâmicos
     async def at(inter):
         await inter.response.defer()
         await atualizar_ranking(gid)
@@ -694,7 +695,7 @@ async def atualizar_ranking(gid):
         if not is_admin(inter.user):
             await inter.response.send_message("❌ Apenas administradores.", ephemeral=True); return
         v = ConfirmarResetView(gid)
-        await inter.response.send_message(view=v, ephemeral=True)
+        await inter.response.send_message(view=v, ephemeral=True)  # ✅ FIX
     b1.callback = at; b2.callback = rs
     row.add_item(b1); row.add_item(b2)
     c.add_item(row)
@@ -764,7 +765,6 @@ class BotaoCriarCanalView(LayoutView):
 
 # ==================== PAINEL DO CANAL PRIVADO ====================
 async def enviar_painel_canal(canal, gid, uid, uname):
-    """Envia o painel LayoutView no canal privado."""
     view = FarmChannelView(gid, uid, uname)
     user_data = dados["usuarios"].get(str(gid), {}).get(str(uid), {})
     qtd_farms = len(user_data.get("farms", []))
@@ -841,7 +841,8 @@ class FarmChannelView(LayoutView):
         if interaction.user.id != self.user_id and not is_admin(interaction.user):
             await interaction.response.send_message("❌ Sem permissão.", ephemeral=True); return
         view = EscolherTipoEdicaoView(self.gid, self.user_id, self.user_name)
-        await interaction.response.send_message("📝 Escolha o tipo de edição:", view=view, ephemeral=True)
+        # ✅ FIX: o texto já está dentro do EscolherTipoEdicaoView; enviar só view
+        await interaction.response.send_message(view=view, ephemeral=True)
 
     async def cb_fechar_caixa(self, interaction):
         if not is_admin(interaction.user):
@@ -1499,7 +1500,7 @@ class ActionModal(Modal, title="Registrar Ação"):
         info = {"nome_acao": self.nome.value, "valor": val, "resultado": res,
                 "data_acao": self.data.value, "puxado_por": interaction.user.id}
         view = MemberSelectView(self.gid, info)
-        await interaction.followup.send("👥 Selecione os membros:", view=view, ephemeral=True)
+        await interaction.followup.send(view=view, ephemeral=True)
 
 class MemberSelectView(LayoutView):
     def __init__(self, gid, info):
@@ -1519,8 +1520,6 @@ class MemberSelectView(LayoutView):
         c.add_item(row)
         self.add_item(c)
     async def _sel(self, interaction):
-        self.membros = list(set([self.info["puxado_por"]] + [u.id for u in interaction.data["resolved"]["users"].values()] if False else [self.info["puxado_por"]]))
-        # Fallback robusto: pega direto do select
         vals = interaction.data["values"]
         self.membros = list(set([self.info["puxado_por"]] + [int(v) for v in vals]))
         await interaction.response.defer()
@@ -1654,7 +1653,8 @@ class SolicitarSetModal(Modal, title="Solicitar SET"):
         await interaction.response.defer(ephemeral=True, thinking=True)
         self.nome_val = self.nome.value; self.id_val = self.id_jogo.value; self.tell_val = self.tell.value
         view = RecrutadorSelectView(self)
-        await interaction.followup.send("👤 Selecione o recrutador:", view=view, ephemeral=True)
+        # ✅ FIX: o texto já está dentro do RecrutadorSelectView; enviar só view
+        await interaction.followup.send(view=view, ephemeral=True)
 
 class RecrutadorSelectView(LayoutView):
     def __init__(self, modal):
@@ -1719,7 +1719,8 @@ class AprovarSetView(View):
         if not pedido or pedido["status"] != "pendente":
             await interaction.response.send_message("❌ Pedido já processado.", ephemeral=True); return
         view = EscolherCargoView(self.gid, self.pid, self.sol_id)
-        await interaction.response.send_message("🎯 Escolha o cargo:", view=view, ephemeral=True)
+        # ✅ FIX: texto já está dentro da EscolherCargoView
+        await interaction.response.send_message(view=view, ephemeral=True)
     async def _recusar(self, interaction):
         if not pode_aprovar_set(interaction.user):
             await interaction.response.send_message("❌ Sem permissão.", ephemeral=True); return
@@ -1840,7 +1841,8 @@ class BackupView(LayoutView):
         if not backups:
             await interaction.followup.send("ℹ️ Nenhum backup encontrado.", ephemeral=True); return
         view = RecarregarBackupView(interaction.guild.id, backups)
-        await interaction.followup.send("📂 Selecione o backup:", view=view, ephemeral=True)
+        # ✅ FIX: texto já está dentro do RecarregarBackupView
+        await interaction.followup.send(view=view, ephemeral=True)
 
 class RecarregarBackupView(LayoutView):
     def __init__(self, gid, backups):
@@ -1883,7 +1885,7 @@ class RecarregarBackupView(LayoutView):
         await atualizar_ranking(self.gid)
 
 # ====================================================================
-# ==================== PAINEL ADMIN /painel4faixaadmin ===============
+# ==================== PAINEL ADMIN ==================================
 # ====================================================================
 
 class AdminPanelView(LayoutView):
@@ -1998,8 +2000,8 @@ class AdminPanelView(LayoutView):
         key = interaction.data["values"][0]
         label = SETTINGS_CONFIG[key][0]
         view = ChannelEditView(self.gid, key, label)
-        await interaction.response.send_message(
-            f"📢 Selecione o novo canal para **{label}**:", view=view, ephemeral=True)
+        # ✅ FIX: enviar só a view (o texto já está dentro do ChannelEditView)
+        await interaction.response.send_message(view=view, ephemeral=True)
 
     # ---------- 👥 CARGOS ----------
     def _build_cargos(self):
@@ -2023,14 +2025,13 @@ class AdminPanelView(LayoutView):
         key = interaction.data["values"][0]
         label = SETTINGS_CONFIG[key][0]
         view = RoleEditView(self.gid, key, label)
-        await interaction.response.send_message(
-            f"👥 Selecione o novo cargo para **{label}**:", view=view, ephemeral=True)
+        # ✅ FIX: enviar só a view
+        await interaction.response.send_message(view=view, ephemeral=True)
 
     # ---------- 📦 PRODUTOS ----------
     def _build_produtos(self):
         c = self._header("📦 Configuração de Produtos",
                          "Nomes, valores unitários e IDs de cargos especiais.")
-        # Produtos (nomes e valores)
         opt_prod = []
         for key, (label, cat) in SETTINGS_CONFIG.items():
             if cat != 'produto':
@@ -2043,7 +2044,6 @@ class AdminPanelView(LayoutView):
             sel.callback = self._on_setting_select_produto
             c.add_item(ActionRow(sel))
         c.add_item(Separator())
-        # Cargos múltiplos (texto)
         opt_txt = []
         for key, (label, cat) in SETTINGS_CONFIG.items():
             if cat != 'texto':
@@ -2184,7 +2184,8 @@ class AdminPanelView(LayoutView):
         if not backups:
             await interaction.followup.send("ℹ️ Nenhum backup encontrado.", ephemeral=True); return
         view = RecarregarBackupView(self.gid, backups)
-        await interaction.followup.send("📂 Selecione o backup para restaurar:", view=view, ephemeral=True)
+        # ✅ FIX: enviar só a view
+        await interaction.followup.send(view=view, ephemeral=True)
 
     async def _backup_delete_all(self, interaction):
         await interaction.response.defer(ephemeral=True, thinking=True)
@@ -2262,8 +2263,8 @@ class AdminPanelView(LayoutView):
 
     async def _mnt_reset(self, interaction):
         view = ConfirmarResetView(self.gid)
-        await interaction.response.send_message(
-            "⚠️ Resetar o ranking do servidor?", view=view, ephemeral=True)
+        # ✅ FIX: enviar só a view
+        await interaction.response.send_message(view=view, ephemeral=True)
 
     async def _mnt_sync(self, interaction):
         await interaction.response.defer(ephemeral=True, thinking=True)
@@ -2287,7 +2288,6 @@ class AdminPanelView(LayoutView):
 async def criar_todos_paineis(guild, settings):
     msgs = []
 
-    # Compra/Venda
     cv_id = settings.get('canal_compra_venda_id')
     if cv_id:
         canal = guild.get_channel(int(cv_id))
@@ -2301,7 +2301,6 @@ async def criar_todos_paineis(guild, settings):
                 msgs.append(f"✅ Compra/Venda → {canal.mention}")
             except: pass
 
-    # Painel privado
     pid = settings.get('canal_painel_privado_id')
     if pid:
         canal = guild.get_channel(int(pid))
@@ -2315,7 +2314,6 @@ async def criar_todos_paineis(guild, settings):
                 msgs.append(f"✅ Painel Privado → {canal.mention}")
             except: pass
 
-    # Backup
     bid = settings.get('canal_backup_painel_id')
     if bid:
         canal = guild.get_channel(int(bid))
@@ -2329,7 +2327,6 @@ async def criar_todos_paineis(guild, settings):
                 msgs.append(f"✅ Backup → {canal.mention}")
             except: pass
 
-    # Ações
     aid = settings.get('canal_acoes_painel_id')
     if aid:
         canal = guild.get_channel(int(aid))
@@ -2343,7 +2340,6 @@ async def criar_todos_paineis(guild, settings):
                 msgs.append(f"✅ Ações → {canal.mention}")
             except: pass
 
-    # SET
     sid = settings.get('canal_solicitar_set_id')
     if sid:
         canal = guild.get_channel(int(sid))
