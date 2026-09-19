@@ -27,7 +27,6 @@ CONFIG_FILE = os.path.join(DATA_DIR, "config_bot.json")
 
 # ==================== CATÁLOGO DE CONFIGURAÇÕES ====================
 SETTINGS_CONFIG = {
-    # --- Canais ---
     'canal_logs_id':              ('📋 Canal de Logs',                      'channel'),
     'canal_admin_logs_id':        ('🛡️ Canal de Logs Admin',               'channel'),
     'canal_rank_id':              ('🏆 Canal de Ranking',                   'channel'),
@@ -41,13 +40,11 @@ SETTINGS_CONFIG = {
     'canal_registros_set_id':     ('📁 Canal Registros SET',                'channel'),
     'canal_painel_privado_id':    ('🔓 Canal Painel Criar Privado',         'channel'),
     'categoria_farms_id':         ('📂 Categoria dos Canais de Farm',       'channel'),
-    # --- Cargos (multi-seleção) ---
     'cargo_00_id':                ('👑 Cargos de Administrador',            'role'),
     'cargo_membro_id':            ('👤 Cargos de Membro',                   'role'),
     'cargo_aprovar_set_id':       ('✅ Cargos Aprovar SET',                 'role'),
     'cargos_compra_venda_ids':    ('💸 Cargos Compra/Venda',                'role'),
     'cargos_registrar_acao_ids':  ('⚔️ Cargos Registrar Ação',              'role'),
-    # --- Produtos ---
     'nome_produto1':              ('📦 Nome Produto 1',                     'produto'),
     'nome_produto2':              ('📦 Nome Produto 2',                     'produto'),
     'nome_produto3':              ('📦 Nome Produto 3',                     'produto'),
@@ -61,7 +58,6 @@ SETTINGS_CONFIG = {
     'valor_produto1_por_unidade': ('💰 Valor Unitário Produto 1 (R$)',      'produto'),
     'valor_produto2_por_unidade': ('💰 Valor Unitário Produto 2 (R$)',      'produto'),
     'valor_produto3_por_unidade': ('💰 Valor Unitário Produto 3 (R$)',      'produto'),
-    # --- Sistema ---
     'taxa_lavagem':               ('💧 Taxa de Lavagem (%)',                'sistema'),
     'taxa_faccao':                ('⚔️ Taxa da Facção (%)',                 'sistema'),
     'taxa_membro':                ('👤 Taxa do Membro (%)',                 'sistema'),
@@ -188,13 +184,55 @@ def get_taxa(gid, key, default_pct):
         return default_pct
 
 def _parse_ids(val):
-    """Converte '123,456,789' em [123, 456, 789]."""
     if not val:
         return []
     try:
         return [int(x.strip()) for x in str(val).split(',') if x.strip().isdigit()]
     except:
         return []
+
+# ==================== PRODUTOS CONFIGURADOS ====================
+# Mapa fixo: nome do produto (1..10) -> chave do valor unitário (só 1..3 têm valor)
+_PRODUTO_NOME_KEYS = [
+    'nome_produto1', 'nome_produto2', 'nome_produto3',
+    'produto4_nome', 'produto5_nome', 'produto6_nome',
+    'produto7_nome', 'produto8_nome', 'produto9_nome',
+    'produto10_nome',
+]
+_PRODUTO_VALOR_KEYS = [
+    'valor_produto1_por_unidade',
+    'valor_produto2_por_unidade',
+    'valor_produto3_por_unidade',
+]
+
+def get_produtos_config(gid):
+    """Retorna SOMENTE os produtos que o usuário configurou (não vazios),
+    na ordem 1..10. Ex: se só configurou 2, retorna uma lista com 2 itens."""
+    s = bot.guild_settings.get(gid, {})
+    resultado = []
+    for key in _PRODUTO_NOME_KEYS:
+        v = s.get(key)
+        if v is not None and str(v).strip():
+            resultado.append(str(v).strip())
+    return resultado
+
+def get_mapa_valor_unidade(gid):
+    """Retorna {nome_produto: valor_unitario} para produtos 1..3 que
+    tenham nome E valor configurados."""
+    s = bot.guild_settings.get(gid, {})
+    mapa = {}
+    for i, nome_key in enumerate(['nome_produto1', 'nome_produto2', 'nome_produto3']):
+        nome = s.get(nome_key)
+        if not nome or not str(nome).strip():
+            continue
+        nome = str(nome).strip()
+        valor_key = _PRODUTO_VALOR_KEYS[i]
+        try:
+            valor = float(str(s.get(valor_key, 0) or 0).replace(',', '.'))
+        except:
+            valor = 0.0
+        mapa[nome] = valor
+    return mapa
 
 async def get_configured_channel(gid, key):
     cid = get_guild_setting(gid, key)
@@ -213,7 +251,7 @@ def _text_layout(text: str, accent: int = 0x5865F2) -> LayoutView:
     layout.add_item(c)
     return layout
 
-# ==================== PERMISSÕES (multi-cargo) ====================
+# ==================== PERMISSÕES ====================
 def tem_cargo(member, cargos_ids):
     for cid in cargos_ids:
         cargo = member.guild.get_role(cid)
@@ -255,25 +293,14 @@ def pode_aprovar_set(member):
 
 # ==================== CÁLCULO ====================
 def calcular_valor_estimado(gid, produtos):
+    """Calcula o valor estimado APENAS com produtos 1..3 que tenham nome + valor configurados."""
+    mapa = get_mapa_valor_unidade(gid)
     total = 0.0
     for p in produtos:
         nome = p.get("produto", "")
         qtd = p.get("quantidade", 0)
-        settings = bot.guild_settings.get(gid, {})
-        chave_valor = None
-        if nome == settings.get('nome_produto1', 'CHUMBO'):
-            chave_valor = 'valor_produto1_por_unidade'
-        elif nome == settings.get('nome_produto2', 'CAPSULA'):
-            chave_valor = 'valor_produto2_por_unidade'
-        elif nome == settings.get('nome_produto3', 'POLVORA'):
-            chave_valor = 'valor_produto3_por_unidade'
-        else:
-            continue
-        try:
-            valor_unidade = float(settings.get(chave_valor, 0) or 0)
-        except:
-            valor_unidade = 0.0
-        total += qtd * valor_unidade
+        if nome in mapa:
+            total += qtd * mapa[nome]
     return total
 
 # ==================== MODAIS BASE ====================
@@ -316,18 +343,18 @@ class ChannelEditView(LayoutView):
         c = Container(accent_color=0x5865F2)
         c.add_item(TextDisplay(f"📢 **Selecione o novo canal para:**\n`{label}`"))
         c.add_item(Separator())
-        sel = ChannelSelect(placeholder="Selecione o canal...",
+        self.select = ChannelSelect(placeholder="Selecione o canal...",
                             channel_types=[discord.ChannelType.text, discord.ChannelType.category])
-        sel.callback = self._cb
-        c.add_item(ActionRow(sel))
+        self.select.callback = self._cb
+        c.add_item(ActionRow(self.select))
         self.add_item(c)
     async def _cb(self, interaction):
         if not is_admin(interaction.user):
             await interaction.response.send_message("❌ Sem permissão.", ephemeral=True); return
-        canal = interaction.data["values"][0]
-        ok = await save_setting(self.gid, self.key, str(canal))
+        canal = self.select.values[0]
+        ok = await save_setting(self.gid, self.key, str(canal.id))
         if ok:
-            await interaction.response.send_message(f"✅ **{self.label_txt}** → <#{canal}>", ephemeral=True)
+            await interaction.response.send_message(f"✅ **{self.label_txt}** → <#{canal.id}>", ephemeral=True)
         else:
             await interaction.response.send_message("❌ Erro ao salvar.", ephemeral=True)
 
@@ -384,11 +411,11 @@ class RoleEditView(LayoutView):
             else:
                 await interaction.response.send_message("❌ Erro ao limpar.", ephemeral=True)
             return
-        csv = ",".join(str(v) for v in values)
+        csv = ",".join(str(v.id) for v in values)
         ok = await save_setting(self.gid, self.key, csv)
         if not ok:
             await interaction.response.send_message("❌ Erro ao salvar.", ephemeral=True); return
-        mencoes = " ".join(f"<@&{v}>" for v in values)
+        mencoes = " ".join(r.mention for r in values)
         await interaction.response.send_message(
             f"✅ **{self.label_txt}** → {len(values)} cargo(s):\n{mencoes}", ephemeral=True)
 
@@ -441,27 +468,20 @@ class ConfirmarFechamentoView(LayoutView):
     async def _sim(self, interaction):
         await interaction.response.defer(ephemeral=True, thinking=True)
         gid_str, uid_str = str(self.gid), str(self.uid)
-
-        # 1. Recupera e REMOVE o registro do canal primeiro
         canal_id = None
         if gid_str in dados["canais"] and uid_str in dados["canais"][gid_str]:
             canal_id = dados["canais"][gid_str][uid_str]
             del dados["canais"][gid_str][uid_str]
             salvar_dados()
-
-        # 2. Envia o followup ANTES de deletar o canal
         try:
             await interaction.followup.send("✅ Canal fechado!", ephemeral=True)
         except Exception:
             pass
-
-        # 3. Agora deleta o canal
         if canal_id:
             canal = interaction.guild.get_channel(canal_id)
             if canal:
                 try: await canal.delete(reason="Fechamento solicitado")
                 except: pass
-
         await log_acao(self.gid, "fechar_canal", interaction.user, "Canal fechado")
         self.stop()
     async def _nao(self, interaction):
@@ -647,17 +667,10 @@ async def atualizar_ranking(gid):
             if msg.author == bot.user:
                 await msg.delete()
     except: pass
-    settings = bot.guild_settings.get(gid, {})
-    produtos_config = [
-        settings.get('nome_produto1', 'CHUMBO'),
-        settings.get('nome_produto2', 'CAPSULA'),
-        settings.get('nome_produto3', 'POLVORA'),
-        settings.get('produto4_nome', ''), settings.get('produto5_nome', ''),
-        settings.get('produto6_nome', ''), settings.get('produto7_nome', ''),
-        settings.get('produto8_nome', ''), settings.get('produto9_nome', ''),
-        settings.get('produto10_nome', '')
-    ]
-    produtos_config = [p for p in produtos_config if p and p.strip()]
+
+    # ✅ APENAS produtos configurados
+    produtos_config = get_produtos_config(gid)
+
     totais_produtos = {prod: 0 for prod in produtos_config}
     produtos_por_usuario = {}
     total_farms = 0
@@ -684,24 +697,33 @@ async def atualizar_ranking(gid):
     c.add_item(TextDisplay(f"Total de farms: **{total_farms}** | Dinheiro sujo total: **R$ {total_ds:,.2f}**"))
     c.add_item(Separator(spacing=discord.SeparatorSpacing.large))
 
-    produtos_ordenados = sorted(totais_produtos.items(), key=lambda x: x[1], reverse=True)[:5]
-    for idx, (nome_prod, _) in enumerate(produtos_ordenados):
-        medalha = ['🥇', '🥈', '🥉', '4️⃣', '5️⃣'][idx] if idx < 5 else f'{idx+1}°'
-        top_usuarios = []
-        for uid, prods in produtos_por_usuario.items():
-            qtd_user = prods.get(nome_prod, 0)
-            if qtd_user > 0:
-                try:
-                    user = await bot.fetch_user(int(uid))
-                    top_usuarios.append((user.name, qtd_user))
-                except: continue
-        top_usuarios.sort(key=lambda x: x[1], reverse=True)
-        top_5 = top_usuarios[:5]
-        texto = "\n".join(
-            f"{'🥇' if i==0 else '🥈' if i==1 else '🥉' if i==2 else f'{i+1}°'} **{u[0]}** - {u[1]:,}"
-            for i, u in enumerate(top_5)
-        ) if top_5 else "Nenhum"
-        c.add_item(TextDisplay(f"### {medalha} {nome_prod}\n{texto}"))
+    if not produtos_config:
+        c.add_item(TextDisplay("_Nenhum produto configurado ainda. Configure em `/painel4faixaadmin` → 📦 Produtos._"))
+    else:
+        # Ordena por quantidade total (desc). Se todos zerados, mantém ordem de config.
+        produtos_ordenados = sorted(
+            totais_produtos.items(),
+            key=lambda x: x[1],
+            reverse=True
+        )
+        # Mostra apenas os produtos configurados (mesmo com 0)
+        for idx, (nome_prod, _) in enumerate(produtos_ordenados):
+            medalha = ['🥇', '🥈', '🥉', '4️⃣', '5️⃣'][idx] if idx < 5 else f'{idx+1}°'
+            top_usuarios = []
+            for uid, prods in produtos_por_usuario.items():
+                qtd_user = prods.get(nome_prod, 0)
+                if qtd_user > 0:
+                    try:
+                        user = await bot.fetch_user(int(uid))
+                        top_usuarios.append((user.name, qtd_user))
+                    except: continue
+            top_usuarios.sort(key=lambda x: x[1], reverse=True)
+            top_5 = top_usuarios[:5]
+            texto = "\n".join(
+                f"{'🥇' if i==0 else '🥈' if i==1 else '🥉' if i==2 else f'{i+1}°'} **{u[0]}** - {u[1]:,}"
+                for i, u in enumerate(top_5)
+            ) if top_5 else "Nenhum registro"
+            c.add_item(TextDisplay(f"### {medalha} {nome_prod}\n{texto}"))
 
     c.add_item(Separator(spacing=discord.SeparatorSpacing.large))
     usuarios = []
@@ -875,6 +897,12 @@ class FarmChannelView(LayoutView):
     async def cb_produtos(self, interaction):
         if interaction.user.id != self.user_id and not is_admin(interaction.user):
             await interaction.response.send_message("❌ Apenas o dono do canal.", ephemeral=True); return
+        # ✅ Verifica se há produtos configurados
+        if not get_produtos_config(self.gid):
+            await interaction.response.send_message(
+                "❌ Nenhum produto configurado. Peça a um admin para configurar em `/painel4faixaadmin` → 📦 Produtos.",
+                ephemeral=True)
+            return
         await interaction.response.send_modal(FarmProdutosModal(self.gid, self.user_id, self.user_name, interaction.channel))
 
     async def cb_dinheiro(self, interaction):
@@ -985,15 +1013,8 @@ class FarmProdutosModal(Modal, title="Registrar Farm Produtos"):
     def __init__(self, gid, uid, uname, canal):
         super().__init__()
         self.gid = gid; self.uid = uid; self.uname = uname; self.canal = canal
-        settings = bot.guild_settings.get(gid, {})
-        prods = [
-            settings.get('nome_produto1', 'CHUMBO'), settings.get('nome_produto2', 'CAPSULA'),
-            settings.get('nome_produto3', 'POLVORA'), settings.get('produto4_nome', ''),
-            settings.get('produto5_nome', ''), settings.get('produto6_nome', ''),
-            settings.get('produto7_nome', ''), settings.get('produto8_nome', ''),
-            settings.get('produto9_nome', ''), settings.get('produto10_nome', '')
-        ]
-        self.produtos = [p for p in prods if p and p.strip()][:5]
+        # ✅ APENAS produtos configurados (até 5, limite do Discord)
+        self.produtos = get_produtos_config(gid)[:5]
         for p in self.produtos:
             self.add_item(TextInput(label=p[:45], required=False))
     async def on_submit(self, interaction):
@@ -1033,7 +1054,10 @@ class FarmProdutosModal(Modal, title="Registrar Farm Produtos"):
         c.add_item(Separator())
         c.add_item(TextDisplay("**Produtos:**\n" + "\n".join(f"• {p['produto']}: {p['quantidade']}" for p in produtos)))
         c.add_item(Separator())
-        c.add_item(TextDisplay(f"📊 Total de itens: **{total_itens}**\n💰 Valor estimado: **R$ {valor:,.2f}**"))
+        if valor > 0:
+            c.add_item(TextDisplay(f"📊 Total de itens: **{total_itens}**\n💰 Valor estimado: **R$ {valor:,.2f}**"))
+        else:
+            c.add_item(TextDisplay(f"📊 Total de itens: **{total_itens}**"))
         c.add_item(Separator())
         c.add_item(MediaGallery(items=[discord.MediaGalleryItem(img)]))
         c.add_item(TextDisplay(f"*Farm #{farm['farm_id']}*"))
@@ -1217,13 +1241,8 @@ class EditarFarmModal(Modal, title="Editar Farm"):
     def __init__(self, gid, uid, uname, canal, idx, farm):
         super().__init__()
         self.gid = gid; self.uid = uid; self.uname = uname; self.canal = canal; self.idx = idx; self.farm = farm
-        settings = bot.guild_settings.get(gid, {})
-        nomes = [
-            settings.get('nome_produto1', 'CHUMBO'), settings.get('nome_produto2', 'CAPSULA'),
-            settings.get('nome_produto3', 'POLVORA'), settings.get('produto4_nome', ''),
-            settings.get('produto5_nome', '')
-        ]
-        nomes = [n for n in nomes if n and n.strip()][:5]
+        # ✅ APENAS produtos configurados
+        nomes = get_produtos_config(gid)[:5]
         self.campos = []
         for nome in nomes:
             inp = TextInput(label=nome[:45], required=False)
@@ -1261,7 +1280,8 @@ class EditarFarmModal(Modal, title="Editar Farm"):
         c.add_item(TextDisplay(f"# ✏️ Farm Editada\nUsuário: <@{self.uid}>"))
         c.add_item(Separator())
         c.add_item(TextDisplay("**Novos produtos:**\n" + "\n".join(f"• {p['produto']}: {p['quantidade']}" for p in novos)))
-        c.add_item(TextDisplay(f"Valor estimado: **R$ {valor:,.2f}**"))
+        if valor > 0:
+            c.add_item(TextDisplay(f"Valor estimado: **R$ {valor:,.2f}**"))
         c.add_item(MediaGallery(items=[discord.MediaGalleryItem(img)]))
         layout.add_item(c)
 
@@ -1356,7 +1376,9 @@ async def enviar_historico_detalhado(interaction, gid, uid, uname):
             data = datetime.strptime(f["data"], "%Y-%m-%d %H:%M:%S").strftime("%d/%m/%Y %H:%M")
             prods = ", ".join(f"{p['produto']}:{p['quantidade']}" for p in f["produtos"])
             valor = calcular_valor_estimado(gid, f["produtos"])
-            c.add_item(TextDisplay(f"**{data}** — Farm #{f.get('farm_id','?')}\n{prods} (R$ {valor:,.2f})"))
+            linha = f"**{data}** — Farm #{f.get('farm_id','?')}\n{prods}"
+            if valor > 0: linha += f" (R$ {valor:,.2f})"
+            c.add_item(TextDisplay(linha))
         c.add_item(Separator())
 
     if trans:
@@ -1779,7 +1801,6 @@ class AprovarSetView(View):
         except: pass
 
 class EscolherCargoView(LayoutView):
-    """Aprovação de SET: mostra TODOS os cargos de 'cargo_membro_id'."""
     def __init__(self, gid, pid, sol_id):
         super().__init__(timeout=120)
         self.gid = gid; self.pid = pid; self.sol_id = sol_id
@@ -1960,6 +1981,17 @@ class AdminPanelView(LayoutView):
             "Use o menu abaixo para navegar entre as seções."
         ))
         c.add_item(Separator(spacing=discord.SeparatorSpacing.large))
+
+        # Resumo rápido de produtos configurados
+        prods = get_produtos_config(self.gid)
+        if prods:
+            c.add_item(TextDisplay(
+                f"**Produtos configurados ({len(prods)}):** "
+                + ", ".join(f"`{p}`" for p in prods)
+            ))
+        else:
+            c.add_item(TextDisplay("**Produtos configurados:** ❌ nenhum ainda"))
+
         c.add_item(TextDisplay(
             f"**Estado:** 🟢 Online\n"
             f"**Servidor:** `{self.gid}`\n"
@@ -2085,7 +2117,18 @@ class AdminPanelView(LayoutView):
     # ---------- 📦 PRODUTOS ----------
     def _build_produtos(self):
         c = self._header("📦 Configuração de Produtos",
-                         "Nomes e valores unitários dos produtos.")
+                         "Nomes e valores unitários dos produtos. Só os que você configurar aparecem no rank e nos modais.")
+
+        # Resumo
+        prods = get_produtos_config(self.gid)
+        if prods:
+            c.add_item(TextDisplay(
+                f"**✅ Produtos ativos ({len(prods)}):** " + ", ".join(f"`{p}`" for p in prods)
+            ))
+        else:
+            c.add_item(TextDisplay("**❌ Nenhum produto ativo.** Configure abaixo."))
+        c.add_item(Separator())
+
         options = []
         for key, (label, cat) in SETTINGS_CONFIG.items():
             if cat != 'produto':
