@@ -26,9 +26,6 @@ DADOS_FILE = os.path.join(DATA_DIR, "dados_bot.json")
 CONFIG_FILE = os.path.join(DATA_DIR, "config_bot.json")
 
 # ==================== CATÁLOGO DE CONFIGURAÇÕES ====================
-# Categorias: channel | role | produto | texto | sistema
-# - role  → RoleSelect multi-seleção (aceita VÁRIOS cargos)
-# - produto / texto / sistema → Modal de texto
 SETTINGS_CONFIG = {
     # --- Canais ---
     'canal_logs_id':              ('📋 Canal de Logs',                      'channel'),
@@ -64,7 +61,7 @@ SETTINGS_CONFIG = {
     'valor_produto1_por_unidade': ('💰 Valor Unitário Produto 1 (R$)',      'produto'),
     'valor_produto2_por_unidade': ('💰 Valor Unitário Produto 2 (R$)',      'produto'),
     'valor_produto3_por_unidade': ('💰 Valor Unitário Produto 3 (R$)',      'produto'),
-    # --- Sistema (taxas) ---
+    # --- Sistema ---
     'taxa_lavagem':               ('💧 Taxa de Lavagem (%)',                'sistema'),
     'taxa_faccao':                ('⚔️ Taxa da Facção (%)',                 'sistema'),
     'taxa_membro':                ('👤 Taxa do Membro (%)',                 'sistema'),
@@ -336,15 +333,11 @@ class ChannelEditView(LayoutView):
 
 # ==================== ROLE EDIT (MULTI-SELEÇÃO) ====================
 class RoleEditView(LayoutView):
-    """RoleSelect com múltipla seleção (0 a 25 cargos).
-    Se salvar vazio, remove a configuração."""
-
     def __init__(self, gid, key, label, guild: discord.Guild):
         super().__init__(timeout=300)
         self.gid = gid; self.key = key; self.label_txt = label
         self.guild = guild
 
-        # Pré-seleciona cargos já configurados
         current_ids = _parse_ids(bot.guild_settings.get(gid, {}).get(key))
         default_roles = []
         for rid in current_ids:
@@ -360,16 +353,15 @@ class RoleEditView(LayoutView):
         ))
         c.add_item(Separator())
 
-        sel = RoleSelect(
+        self.select = RoleSelect(
             placeholder="Selecione um ou mais cargos...",
-            min_values=0,       # permite limpar
+            min_values=0,
             max_values=25,
             default_values=default_roles if default_roles else []
         )
-        sel.callback = self._cb
-        c.add_item(ActionRow(sel))
+        self.select.callback = self._cb
+        c.add_item(ActionRow(self.select))
 
-        # Resumo
         if default_roles:
             c.add_item(TextDisplay(
                 f"**Atualmente configurados ({len(default_roles)}):** "
@@ -383,10 +375,8 @@ class RoleEditView(LayoutView):
     async def _cb(self, interaction):
         if not is_admin(interaction.user):
             await interaction.response.send_message("❌ Sem permissão.", ephemeral=True); return
-        values = interaction.data.get("values") or []
-
+        values = self.select.values or []
         if not values:
-            # Limpar
             ok = await save_setting(self.gid, self.key, "")
             if ok:
                 await interaction.response.send_message(
@@ -394,13 +384,10 @@ class RoleEditView(LayoutView):
             else:
                 await interaction.response.send_message("❌ Erro ao limpar.", ephemeral=True)
             return
-
-        # Salva como string CSV
         csv = ",".join(str(v) for v in values)
         ok = await save_setting(self.gid, self.key, csv)
         if not ok:
             await interaction.response.send_message("❌ Erro ao salvar.", ephemeral=True); return
-
         mencoes = " ".join(f"<@&{v}>" for v in values)
         await interaction.response.send_message(
             f"✅ **{self.label_txt}** → {len(values)} cargo(s):\n{mencoes}", ephemeral=True)
@@ -454,15 +441,27 @@ class ConfirmarFechamentoView(LayoutView):
     async def _sim(self, interaction):
         await interaction.response.defer(ephemeral=True, thinking=True)
         gid_str, uid_str = str(self.gid), str(self.uid)
+
+        # 1. Recupera e REMOVE o registro do canal primeiro
+        canal_id = None
         if gid_str in dados["canais"] and uid_str in dados["canais"][gid_str]:
             canal_id = dados["canais"][gid_str][uid_str]
+            del dados["canais"][gid_str][uid_str]
+            salvar_dados()
+
+        # 2. Envia o followup ANTES de deletar o canal
+        try:
+            await interaction.followup.send("✅ Canal fechado!", ephemeral=True)
+        except Exception:
+            pass
+
+        # 3. Agora deleta o canal
+        if canal_id:
             canal = interaction.guild.get_channel(canal_id)
             if canal:
                 try: await canal.delete(reason="Fechamento solicitado")
                 except: pass
-            del dados["canais"][gid_str][uid_str]
-            salvar_dados()
-        await interaction.followup.send("✅ Canal fechado!", ephemeral=True)
+
         await log_acao(self.gid, "fechar_canal", interaction.user, "Canal fechado")
         self.stop()
     async def _nao(self, interaction):
@@ -794,7 +793,6 @@ class BotaoCriarCanalView(LayoutView):
             interaction.user: discord.PermissionOverwrite(read_messages=True, send_messages=True, attach_files=True, embed_links=True),
             interaction.guild.me: discord.PermissionOverwrite(read_messages=True, send_messages=True, manage_channels=True)
         }
-        # Adiciona TODOS os cargos admin configurados
         for rid in _parse_ids(get_guild_setting(gid, 'cargo_00_id')):
             cargo = interaction.guild.get_role(rid)
             if cargo:
@@ -995,17 +993,18 @@ class FarmProdutosModal(Modal, title="Registrar Farm Produtos"):
             settings.get('produto7_nome', ''), settings.get('produto8_nome', ''),
             settings.get('produto9_nome', ''), settings.get('produto10_nome', '')
         ]
-        prods = [p for p in prods if p and p.strip()][:5]
-        for p in prods:
+        self.produtos = [p for p in prods if p and p.strip()][:5]
+        for p in self.produtos:
             self.add_item(TextInput(label=p[:45], required=False))
     async def on_submit(self, interaction):
         await interaction.response.defer(ephemeral=True, thinking=True)
         produtos = []
-        for campo in self.children:
+        for i, campo in enumerate(self.children):
             if campo.value is not None and campo.value.strip():
                 try:
                     q = int(campo.value.strip())
-                    if q > 0: produtos.append({"produto": campo.label, "quantidade": q})
+                    if q > 0:
+                        produtos.append({"produto": self.produtos[i], "quantidade": q})
                 except: pass
         if not produtos:
             await interaction.followup.send("❌ Nenhum produto válido.", ephemeral=True); return
@@ -1036,7 +1035,7 @@ class FarmProdutosModal(Modal, title="Registrar Farm Produtos"):
         c.add_item(Separator())
         c.add_item(TextDisplay(f"📊 Total de itens: **{total_itens}**\n💰 Valor estimado: **R$ {valor:,.2f}**"))
         c.add_item(Separator())
-        c.add_item(MediaGallery(items=[discord.MediaGalleryItem(url=img)]))
+        c.add_item(MediaGallery(items=[discord.MediaGalleryItem(img)]))
         c.add_item(TextDisplay(f"*Farm #{farm['farm_id']}*"))
         layout.add_item(c)
 
@@ -1086,7 +1085,7 @@ class DinheiroSujoModal(Modal, title="Registrar Dinheiro Sujo"):
         c.add_item(TextDisplay(f"# 💰 Dinheiro Sujo\nUsuário: <@{self.uid}>"))
         c.add_item(Separator())
         c.add_item(TextDisplay(f"Valor: **R$ {val:,.2f}**\nNovo total: **R$ {novo_total:,.2f}**"))
-        c.add_item(MediaGallery(items=[discord.MediaGalleryItem(url=img)]))
+        c.add_item(MediaGallery(items=[discord.MediaGalleryItem(img)]))
         layout.add_item(c)
 
         try: await self.canal.send(view=layout)
@@ -1156,7 +1155,7 @@ class FechamentoCaixaModal(Modal, title="Finalizar Fechamento"):
             + (f"\nObservação: {obs_text}" if obs_text else "")
         ))
         c.add_item(Separator())
-        c.add_item(MediaGallery(items=[discord.MediaGalleryItem(url=img)]))
+        c.add_item(MediaGallery(items=[discord.MediaGalleryItem(img)]))
         c.add_item(TextDisplay(f"Admin: {interaction.user.display_name}"))
         layout.add_item(c)
 
@@ -1178,16 +1177,16 @@ class EscolherTipoEdicaoView(LayoutView):
         c = Container(accent_color=0x2C2F33)
         c.add_item(TextDisplay("# 📝 Escolha o tipo de edição"))
         c.add_item(Separator())
-        sel = Select(placeholder="O que editar?",
+        self.select = Select(placeholder="O que editar?",
                      options=[
                          discord.SelectOption(label="Produtos", value="produtos", emoji="📦"),
                          discord.SelectOption(label="Dinheiro Sujo", value="dinheiro", emoji="💰"),
                      ])
-        sel.callback = self._cb
-        c.add_item(ActionRow(sel))
+        self.select.callback = self._cb
+        c.add_item(ActionRow(self.select))
         self.add_item(c)
     async def _cb(self, interaction):
-        v = interaction.data["values"][0]
+        v = self.select.values[0]
         if v == "produtos":
             select = EditarRegistroSelect(self.gid, self.uid, self.uname)
             view = View(timeout=None); view.add_item(select)
@@ -1263,7 +1262,7 @@ class EditarFarmModal(Modal, title="Editar Farm"):
         c.add_item(Separator())
         c.add_item(TextDisplay("**Novos produtos:**\n" + "\n".join(f"• {p['produto']}: {p['quantidade']}" for p in novos)))
         c.add_item(TextDisplay(f"Valor estimado: **R$ {valor:,.2f}**"))
-        c.add_item(MediaGallery(items=[discord.MediaGalleryItem(url=img)]))
+        c.add_item(MediaGallery(items=[discord.MediaGalleryItem(img)]))
         layout.add_item(c)
 
         try: await self.canal.send(view=layout)
@@ -1326,7 +1325,7 @@ class EditarDinheiroModal(Modal, title="Editar Dinheiro Sujo"):
             f"Novo valor: R$ {val:,.2f}\n"
             f"Novo total: R$ {novo_total:,.2f}"
         ))
-        c.add_item(MediaGallery(items=[discord.MediaGalleryItem(url=img)]))
+        c.add_item(MediaGallery(items=[discord.MediaGalleryItem(img)]))
         layout.add_item(c)
 
         try: await self.canal.send(view=layout)
@@ -1556,9 +1555,9 @@ class MemberSelectView(LayoutView):
         c = Container(accent_color=0x2C2F33)
         c.add_item(TextDisplay("👥 **Selecione os membros participantes**"))
         c.add_item(Separator())
-        sel = UserSelect(placeholder="Membros", min_values=1, max_values=25)
-        sel.callback = self._sel
-        c.add_item(ActionRow(sel))
+        self.select = UserSelect(placeholder="Membros", min_values=1, max_values=25)
+        self.select.callback = self._sel
+        c.add_item(ActionRow(self.select))
         row = ActionRow()
         b = Button(label="Confirmar", style=discord.ButtonStyle.success)
         b.callback = self._confirm
@@ -1566,8 +1565,8 @@ class MemberSelectView(LayoutView):
         c.add_item(row)
         self.add_item(c)
     async def _sel(self, interaction):
-        vals = interaction.data["values"]
-        self.membros = list(set([self.info["puxado_por"]] + [int(v) for v in vals]))
+        vals = self.select.values
+        self.membros = list(set([self.info["puxado_por"]] + [u.id for u in vals]))
         await interaction.response.defer()
     async def _confirm(self, interaction):
         await interaction.response.defer(ephemeral=True, thinking=True)
@@ -1600,7 +1599,7 @@ class MemberSelectView(LayoutView):
                 f"**Participantes:** {' '.join(f'<@{m}>' for m in self.membros)}"
             ))
             if urls:
-                c.add_item(MediaGallery(items=[discord.MediaGalleryItem(url=urls[0])]))
+                c.add_item(MediaGallery(items=[discord.MediaGalleryItem(urls[0])]))
             layout.add_item(c)
             try: await canal.send(view=layout)
             except: pass
@@ -1680,7 +1679,7 @@ class ConfirmPaymentView(LayoutView):
                     f"**Ação:** {action['nome_acao']}\n**Valor líquido:** R$ {self.liquido:,.2f}"
                 ))
                 if urls:
-                    c.add_item(MediaGallery(items=[discord.MediaGalleryItem(url=urls[0])]))
+                    c.add_item(MediaGallery(items=[discord.MediaGalleryItem(urls[0])]))
                 layout.add_item(c)
                 try: await canal.send(view=layout)
                 except: pass
@@ -1708,13 +1707,13 @@ class RecrutadorSelectView(LayoutView):
         c = Container(accent_color=0x2C2F33)
         c.add_item(TextDisplay("👤 **Selecione o recrutador**"))
         c.add_item(Separator())
-        sel = UserSelect(placeholder="Recrutador", min_values=1, max_values=1)
-        sel.callback = self._cb
-        c.add_item(ActionRow(sel))
+        self.select = UserSelect(placeholder="Recrutador", min_values=1, max_values=1)
+        self.select.callback = self._cb
+        c.add_item(ActionRow(self.select))
         self.add_item(c)
     async def _cb(self, interaction):
-        rec_id = int(interaction.data["values"][0])
-        rec = interaction.guild.get_member(rec_id)
+        rec = self.select.values[0]
+        rec_id = rec.id
         if not rec:
             await interaction.response.send_message("❌ Recrutador não encontrado.", ephemeral=True); return
         pid = str(int(datetime.now().timestamp()))
@@ -1780,17 +1779,16 @@ class AprovarSetView(View):
         except: pass
 
 class EscolherCargoView(LayoutView):
-    """Para aprovar SET, mostra TODOS os cargos configurados como 'cargo_membro_id'."""
+    """Aprovação de SET: mostra TODOS os cargos de 'cargo_membro_id'."""
     def __init__(self, gid, pid, sol_id):
         super().__init__(timeout=120)
         self.gid = gid; self.pid = pid; self.sol_id = sol_id
 
         membro_ids = _parse_ids(get_guild_setting(gid, 'cargo_membro_id'))
         opts = []
+        guild = bot.get_guild(gid)
         for rid in membro_ids:
-            role = None
-            # Não temos guild aqui; placeholder — busca no cache via bot
-            role = bot.get_guild(gid).get_role(rid) if bot.get_guild(gid) else None
+            role = guild.get_role(rid) if guild else None
             nome = role.name if role else f"ID {rid}"
             opts.append(discord.SelectOption(label=nome[:80], value=str(rid)))
         if not opts:
@@ -1799,12 +1797,14 @@ class EscolherCargoView(LayoutView):
         c = Container(accent_color=0x2C2F33)
         c.add_item(TextDisplay("🎯 **Escolha o cargo a atribuir**"))
         c.add_item(Separator())
-        sel = Select(placeholder="Cargo", options=opts[:25])
-        sel.callback = self._cb
-        c.add_item(ActionRow(sel))
+
+        self.select = Select(placeholder="Cargo", options=opts[:25])
+        self.select.callback = self._cb
+        c.add_item(ActionRow(self.select))
         self.add_item(c)
+
     async def _cb(self, interaction):
-        valor = self.children[0].children[0].values[0]
+        valor = self.select.values[0]
         if valor == "none":
             await interaction.response.send_message("❌ Cargo não configurado.", ephemeral=True); return
         cargo_id = int(valor)
@@ -1913,13 +1913,13 @@ class RecarregarBackupView(LayoutView):
                 label = f"{data.get('data_backup','?')} - {data.get('admin','?')}"
             except: label = os.path.basename(b)
             options.append(discord.SelectOption(label=label[:100], value=b))
-        sel = Select(options=options)
-        sel.callback = self._cb
-        c.add_item(ActionRow(sel))
+        self.select = Select(options=options)
+        self.select.callback = self._cb
+        c.add_item(ActionRow(self.select))
         self.add_item(c)
     async def _cb(self, interaction):
         await interaction.response.defer(ephemeral=True, thinking=True)
-        arquivo = interaction.data["values"][0]
+        arquivo = self.select.values[0]
         try:
             with open(arquivo, 'r') as f: backup = json.load(f)
         except Exception as e:
@@ -1967,7 +1967,7 @@ class AdminPanelView(LayoutView):
         ))
         c.add_item(Separator())
 
-        select = Select(
+        self.main_select = Select(
             placeholder="🎯 Escolha uma categoria...",
             options=[
                 discord.SelectOption(label="Canais", value="canais", emoji="📢",
@@ -1988,12 +1988,12 @@ class AdminPanelView(LayoutView):
                                      description="Recarregar, limpar e resetar dados"),
             ],
         )
-        select.callback = self._on_main_select
-        c.add_item(ActionRow(select))
+        self.main_select.callback = self._on_main_select
+        c.add_item(ActionRow(self.main_select))
         self.add_item(c)
 
     async def _on_main_select(self, interaction):
-        v = interaction.data["values"][0]
+        v = self.main_select.values[0]
         handlers = {
             "canais": self._build_canais,
             "cargos": self._build_cargos,
@@ -2040,14 +2040,14 @@ class AdminPanelView(LayoutView):
             desc = f"✅ Canal: {current}" if current and str(current).isdigit() else "❌ Não configurado"
             options.append(discord.SelectOption(label=label[:80], value=key, description=desc[:100]))
         if options:
-            sel = Select(placeholder="📢 Escolha um canal...", options=options[:25])
-            sel.callback = self._on_setting_select_channel
-            c.add_item(ActionRow(sel))
+            self.canais_select = Select(placeholder="📢 Escolha um canal...", options=options[:25])
+            self.canais_select.callback = self._on_setting_select_channel
+            c.add_item(ActionRow(self.canais_select))
         self._add_back_row(c)
         self.add_item(c)
 
     async def _on_setting_select_channel(self, interaction):
-        key = interaction.data["values"][0]
+        key = self.canais_select.values[0]
         label = SETTINGS_CONFIG[key][0]
         view = ChannelEditView(self.gid, key, label)
         await interaction.response.send_message(view=view, ephemeral=True)
@@ -2065,19 +2065,19 @@ class AdminPanelView(LayoutView):
             if not ids:
                 desc = "❌ Não configurado"
             elif len(ids) == 1:
-                desc = f"✅ 1 cargo"
+                desc = "✅ 1 cargo"
             else:
                 desc = f"✅ {len(ids)} cargos"
             options.append(discord.SelectOption(label=label[:80], value=key, description=desc[:100]))
         if options:
-            sel = Select(placeholder="👥 Escolha um cargo/lista...", options=options[:25])
-            sel.callback = self._on_setting_select_role
-            c.add_item(ActionRow(sel))
+            self.cargos_select = Select(placeholder="👥 Escolha um cargo/lista...", options=options[:25])
+            self.cargos_select.callback = self._on_setting_select_role
+            c.add_item(ActionRow(self.cargos_select))
         self._add_back_row(c)
         self.add_item(c)
 
     async def _on_setting_select_role(self, interaction):
-        key = interaction.data["values"][0]
+        key = self.cargos_select.values[0]
         label = SETTINGS_CONFIG[key][0]
         view = RoleEditView(self.gid, key, label, interaction.guild)
         await interaction.response.send_message(view=view, ephemeral=True)
@@ -2094,14 +2094,14 @@ class AdminPanelView(LayoutView):
             desc = f"✅ {str(current)[:60]}" if current else "❌ Não configurado"
             options.append(discord.SelectOption(label=label[:80], value=key, description=desc[:100]))
         if options:
-            sel = Select(placeholder="📦 Escolha um produto/campo...", options=options[:25])
-            sel.callback = self._on_setting_select_produto
-            c.add_item(ActionRow(sel))
+            self.produtos_select = Select(placeholder="📦 Escolha um produto/campo...", options=options[:25])
+            self.produtos_select.callback = self._on_setting_select_produto
+            c.add_item(ActionRow(self.produtos_select))
         self._add_back_row(c)
         self.add_item(c)
 
     async def _on_setting_select_produto(self, interaction):
-        key = interaction.data["values"][0]
+        key = self.produtos_select.values[0]
         label = SETTINGS_CONFIG[key][0]
         await interaction.response.send_modal(TextEditModal(self.gid, key, label))
 
@@ -2130,14 +2130,14 @@ class AdminPanelView(LayoutView):
             options.append(discord.SelectOption(
                 label=label[:80], value=key, description=f"Atual: {current}%"))
         if options:
-            sel = Select(placeholder="⚙️ Escolha uma taxa...", options=options[:25])
-            sel.callback = self._on_setting_select_sistema
-            c.add_item(ActionRow(sel))
+            self.sistema_select = Select(placeholder="⚙️ Escolha uma taxa...", options=options[:25])
+            self.sistema_select.callback = self._on_setting_select_sistema
+            c.add_item(ActionRow(self.sistema_select))
         self._add_back_row(c)
         self.add_item(c)
 
     async def _on_setting_select_sistema(self, interaction):
-        key = interaction.data["values"][0]
+        key = self.sistema_select.values[0]
         label = SETTINGS_CONFIG[key][0]
         await interaction.response.send_modal(TextEditModal(self.gid, key, label))
 
