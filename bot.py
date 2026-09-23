@@ -564,7 +564,6 @@ async def log_acao(gid, acao, usuario, detalhes, cor=None, imagem_url=None, imag
     }
     cor_final = cores.get(acao, 0x2C2F33) if cor is None else cor
 
-    # Coleta todas as URLs de imagem
     todas_imgs = []
     if imagem_url:
         todas_imgs.append(imagem_url)
@@ -584,7 +583,7 @@ async def log_acao(gid, acao, usuario, detalhes, cor=None, imagem_url=None, imag
             c.add_item(TextDisplay(f"Autor: **{usuario.name}**"))
         if todas_imgs:
             c.add_item(Separator())
-            c.add_item(MediaGallery(items=[discord.MediaGalleryItem(u) for u in todas_imgs[:10]]))
+            c.add_item(MediaGallery(*[discord.MediaGalleryItem(u) for u in todas_imgs[:10]]))
         layout.add_item(c)
         try:
             await canal_geral.send(view=layout)
@@ -603,7 +602,7 @@ async def log_acao(gid, acao, usuario, detalhes, cor=None, imagem_url=None, imag
             c.add_item(TextDisplay(f"Autor: **{usuario.name}**"))
         if todas_imgs:
             c.add_item(Separator())
-            c.add_item(MediaGallery(items=[discord.MediaGalleryItem(u) for u in todas_imgs[:10]]))
+            c.add_item(MediaGallery(*[discord.MediaGalleryItem(u) for u in todas_imgs[:10]]))
         layout.add_item(c)
         try:
             await canal_admin.send(view=layout)
@@ -625,7 +624,7 @@ async def log_admin(gid, titulo, descricao, cor=0x99AAB5, imagem_url=None, image
         c.add_item(TextDisplay(descricao))
         if todas_imgs:
             c.add_item(Separator())
-            c.add_item(MediaGallery(items=[discord.MediaGalleryItem(u) for u in todas_imgs[:10]]))
+            c.add_item(MediaGallery(*[discord.MediaGalleryItem(u) for u in todas_imgs[:10]]))
         layout.add_item(c)
         try:
             await canal.send(view=layout)
@@ -1090,7 +1089,7 @@ class FarmProdutosModal(Modal, title="Registrar Farm Produtos"):
         else:
             c.add_item(TextDisplay(f"📊 Total de itens: **{total_itens}**"))
         c.add_item(Separator())
-        c.add_item(MediaGallery(items=[discord.MediaGalleryItem(img)]))
+        c.add_item(MediaGallery(discord.MediaGalleryItem(img)))
         c.add_item(TextDisplay(f"*Farm #{farm['farm_id']}*"))
         layout.add_item(c)
 
@@ -1162,7 +1161,7 @@ class DinheiroSujoModal(Modal, title="Registrar Dinheiro Sujo"):
         c.add_item(TextDisplay(f"# 💰 Dinheiro Sujo\nUsuário: <@{self.uid}>"))
         c.add_item(Separator())
         c.add_item(TextDisplay(f"Valor: **R$ {val:,.2f}**\nNovo total: **R$ {novo_total:,.2f}**"))
-        c.add_item(MediaGallery(items=[discord.MediaGalleryItem(img)]))
+        c.add_item(MediaGallery(discord.MediaGalleryItem(img)))
         layout.add_item(c)
 
         # Envia no canal do usuário e FIXA
@@ -1250,7 +1249,7 @@ class FechamentoCaixaModal(Modal, title="Finalizar Fechamento"):
             + (f"\nObservação: {obs_text}" if obs_text else "")
         ))
         c.add_item(Separator())
-        c.add_item(MediaGallery(items=[discord.MediaGalleryItem(img)]))
+        c.add_item(MediaGallery(discord.MediaGalleryItem(img)))
         c.add_item(TextDisplay(f"Admin: {interaction.user.display_name}"))
         layout.add_item(c)
 
@@ -1372,7 +1371,7 @@ class EditarFarmModal(Modal, title="Editar Farm"):
         c.add_item(TextDisplay("**Novos produtos:**\n" + "\n".join(f"• {p['produto']}: {p['quantidade']}" for p in novos)))
         if valor > 0:
             c.add_item(TextDisplay(f"Valor estimado: **R$ {valor:,.2f}**"))
-        c.add_item(MediaGallery(items=[discord.MediaGalleryItem(img)]))
+        c.add_item(MediaGallery(discord.MediaGalleryItem(img)))
         layout.add_item(c)
 
         # Envia e fixa no canal do usuário
@@ -1453,7 +1452,7 @@ class EditarDinheiroModal(Modal, title="Editar Dinheiro Sujo"):
             f"Novo valor: R$ {val:,.2f}\n"
             f"Novo total: R$ {novo_total:,.2f}"
         ))
-        c.add_item(MediaGallery(items=[discord.MediaGalleryItem(img)]))
+        c.add_item(MediaGallery(discord.MediaGalleryItem(img)))
         layout.add_item(c)
 
         try:
@@ -1746,7 +1745,7 @@ class MemberSelectView(LayoutView):
                 f"**Participantes:** {' '.join(f'<@{m}>' for m in self.membros)}"
             ))
             if urls:
-                c.add_item(MediaGallery(items=[discord.MediaGalleryItem(urls[0])]))
+                c.add_item(MediaGallery(discord.MediaGalleryItem(urls[0])))
             layout.add_item(c)
             try: await canal.send(view=layout)
             except: pass
@@ -1836,13 +1835,12 @@ class ConfirmPaymentView(LayoutView):
                     f"**Ação:** {action['nome_acao']}\n**Valor líquido:** R$ {self.liquido:,.2f}"
                 ))
                 if urls:
-                    c.add_item(MediaGallery(items=[discord.MediaGalleryItem(urls[0])]))
+                    c.add_item(MediaGallery(discord.MediaGalleryItem(urls[0])))
                 layout.add_item(c)
                 try: await canal.send(view=layout)
                 except: pass
             await interaction.followup.send("✅ Pagamento registrado!", ephemeral=True)
 
-            # Log geral + admin COM IMAGENS
             detalhes = (
                 f"⚔️ Ação: {action['nome_acao']}\n"
                 f"💵 Valor líquido: R$ {self.liquido:,.2f}\n"
