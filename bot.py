@@ -2291,3 +2291,440 @@ class AdminPanelView(LayoutView):
                          "Percentuais usados nos cálculos de fechamento e ações.")
         t_lav = bot.guild_settings.get(self.gid, {}).get('taxa_lavagem', '25')
         t_fac = bot.guild_settings.get(self.gid, {}).get('taxa_faccao', '60')
+        t_mem = bot.guild_settings.get(self.gid, {}).get('taxa_membro', '40')
+        t_acl = bot.guild_settings.get(self.gid, {}).get('taxa_acao_lavagem', '25')
+        c.add_item(TextDisplay(
+            f"**Resumo atual:**\n"
+            f"💧 Lavagem: `{t_lav}%`\n"
+            f"⚔️ Facção: `{t_fac}%`\n"
+            f"👤 Membro: `{t_mem}%`\n"
+            f"🎯 Lavagem em Ações: `{t_acl}%`"
+        ))
+        c.add_item(Separator())
+
+        options = []
+        for key, (label, cat) in SETTINGS_CONFIG.items():
+            if cat != 'sistema':
+                continue
+            current = bot.guild_settings.get(self.gid, {}).get(key, "padrão")
+            options.append(discord.SelectOption(
+                label=label[:80], value=key, description=f"Atual: {current}%"))
+        if options:
+            self.sistema_select = Select(placeholder="⚙️ Escolha uma taxa...", options=options[:25])
+            self.sistema_select.callback = self._on_setting_select_sistema
+            c.add_item(ActionRow(self.sistema_select))
+        self._add_back_row(c)
+        self.add_item(c)
+
+    async def _on_setting_select_sistema(self, interaction):
+        key = self.sistema_select.values[0]
+        label = SETTINGS_CONFIG[key][0]
+        await interaction.response.send_modal(TextEditModal(self.gid, key, label))
+
+    def _build_paineis(self):
+        c = self._header("🎛️ Painéis do Servidor",
+                         "Publique, atualize ou remova os painéis interativos.")
+        c.add_item(TextDisplay(
+            "• **Publicar/Atualizar** — recria todos os painéis nos canais configurados\n"
+            "• **Limpar painéis** — apaga as mensagens do bot nos canais de painel\n"
+            "• **Atualizar ranking** — força a atualização do ranking"
+        ))
+        c.add_item(Separator())
+        row = ActionRow()
+        b1 = Button(label="Publicar / Atualizar", style=discord.ButtonStyle.success, emoji="🎛️")
+        b2 = Button(label="Limpar Painéis", style=discord.ButtonStyle.danger, emoji="🧹")
+        b3 = Button(label="Atualizar Ranking", style=discord.ButtonStyle.secondary, emoji="🏆")
+        b1.callback = self._panel_publish
+        b2.callback = self._panel_clear
+        b3.callback = self._panel_ranking
+        row.add_item(b1); row.add_item(b2); row.add_item(b3)
+        c.add_item(row)
+        self._add_back_row(c)
+        self.add_item(c)
+
+    async def _panel_publish(self, interaction):
+        await interaction.response.defer(ephemeral=True, thinking=True)
+        settings = bot.guild_settings.get(self.gid, {})
+        res = await criar_todos_paineis(interaction.guild, settings)
+        await interaction.followup.send(res, ephemeral=True)
+
+    async def _panel_clear(self, interaction):
+        await interaction.response.defer(ephemeral=True, thinking=True)
+        settings = bot.guild_settings.get(self.gid, {})
+        keys = ['canal_compra_venda_id', 'canal_painel_privado_id',
+                'canal_backup_painel_id', 'canal_acoes_painel_id',
+                'canal_solicitar_set_id', 'canal_rank_id']
+        total = 0
+        for k in keys:
+            cid = settings.get(k)
+            if not cid: continue
+            try:
+                ch = interaction.guild.get_channel(int(cid))
+                if not ch: continue
+                async for m in ch.history(limit=50):
+                    if m.author == bot.user:
+                        try: await m.delete(); total += 1
+                        except: pass
+            except: pass
+        await interaction.followup.send(f"🧹 {total} mensagem(ns) removida(s).", ephemeral=True)
+
+    async def _panel_ranking(self, interaction):
+        await interaction.response.defer(ephemeral=True, thinking=True)
+        await atualizar_ranking(self.gid)
+        await interaction.followup.send("🏆 Ranking atualizado!", ephemeral=True)
+
+    def _build_backup(self):
+        c = self._header("💾 Backup do Servidor",
+                         "Gerencie os arquivos de backup dos dados do servidor.")
+        arquivos = sorted(glob.glob(os.path.join(DATA_DIR, f"backup_{self.gid}_*.json")), reverse=True)
+        c.add_item(TextDisplay(f"**Backups disponíveis:** `{len(arquivos)}`"))
+        c.add_item(Separator())
+        row = ActionRow()
+        b1 = Button(label="Criar Backup", style=discord.ButtonStyle.success, emoji="💾")
+        b2 = Button(label="Listar / Restaurar", style=discord.ButtonStyle.primary, emoji="📂")
+        b3 = Button(label="Apagar Todos", style=discord.ButtonStyle.danger, emoji="🗑️")
+        b1.callback = self._backup_create
+        b2.callback = self._backup_list
+        b3.callback = self._backup_delete_all
+        row.add_item(b1); row.add_item(b2); row.add_item(b3)
+        c.add_item(row)
+        self._add_back_row(c)
+        self.add_item(c)
+
+    async def _backup_create(self, interaction):
+        await interaction.response.defer(ephemeral=True, thinking=True)
+        nome = await salvar_backup_completo(self.gid, interaction.user.name)
+        await interaction.followup.send(f"✅ Backup `{nome}` criado!", ephemeral=True)
+
+    async def _backup_list(self, interaction):
+        await interaction.response.defer(ephemeral=True, thinking=True)
+        backups = sorted(glob.glob(os.path.join(DATA_DIR, f"backup_{self.gid}_*.json")), reverse=True)
+        if not backups:
+            await interaction.followup.send("ℹ️ Nenhum backup encontrado.", ephemeral=True); return
+        view = RecarregarBackupView(self.gid, backups)
+        await interaction.followup.send(view=view, ephemeral=True)
+
+    async def _backup_delete_all(self, interaction):
+        await interaction.response.defer(ephemeral=True, thinking=True)
+        backups = glob.glob(os.path.join(DATA_DIR, f"backup_{self.gid}_*.json"))
+        n = 0
+        for b in backups:
+            try: os.remove(b); n += 1
+            except: pass
+        await interaction.followup.send(f"🗑️ {n} backup(s) deletado(s).", ephemeral=True)
+
+    def _build_stats(self):
+        c = self._header("📊 Estatísticas do Servidor", "Métricas gerais de uso do bot.")
+        gid_str = str(self.gid)
+        total_usuarios = len(dados["usuarios"].get(gid_str, {}))
+        total_farms = 0; total_ds = 0.0
+        total_canais = len(dados["canais"].get(gid_str, {}))
+        total_pags = 0
+        for uid, d in dados["usuarios"].get(gid_str, {}).items():
+            if "removido_em" in d: continue
+            total_farms += len(d.get("farms", []))
+            total_ds += d.get("dinheiro_sujo", 0)
+            total_pags += len(d.get("pagamentos", []))
+        total_acoes = len(dados["acoes"].get(gid_str, {}))
+        total_set = len(dados["sets_pendentes"].get(gid_str, {}))
+
+        c.add_item(TextDisplay(
+            f"👥 **Usuários ativos:** `{total_usuarios}`\n"
+            f"📦 **Farms registrados:** `{total_farms}`\n"
+            f"💰 **Dinheiro sujo total:** `R$ {total_ds:,.2f}`\n"
+            f"💵 **Pagamentos:** `{total_pags}`\n"
+            f"🔓 **Canais privados abertos:** `{total_canais}`\n"
+            f"⚔️ **Ações registradas:** `{total_acoes}`\n"
+            f"📋 **Sets pendentes:** `{total_set}`"
+        ))
+        c.add_item(Separator())
+        row = ActionRow()
+        b = Button(label="Atualizar", style=discord.ButtonStyle.secondary, emoji="🔄")
+        b.callback = self._refresh_stats
+        row.add_item(b)
+        c.add_item(row)
+        self._add_back_row(c)
+        self.add_item(c)
+
+    async def _refresh_stats(self, interaction):
+        self._clear_and_build(self._build_stats)
+        await interaction.response.edit_message(view=self)
+
+    def _build_manutencao(self):
+        c = self._header("🔧 Manutenção",
+                         "Ferramentas avançadas. Use com cuidado.")
+        c.add_item(TextDisplay(
+            "• **Recarregar config** — relê `config_bot.json` do disco\n"
+            "• **Resetar ranking** — apaga farms/pagamentos do servidor (faz backup antes)\n"
+            "• **Sync comandos** — força re-sync dos slash commands"
+        ))
+        c.add_item(Separator())
+        row = ActionRow()
+        b1 = Button(label="Recarregar config", style=discord.ButtonStyle.primary, emoji="🔄")
+        b2 = Button(label="Resetar ranking", style=discord.ButtonStyle.danger, emoji="⚠️")
+        b3 = Button(label="Sync comandos", style=discord.ButtonStyle.secondary, emoji="🔁")
+        b1.callback = self._mnt_reload
+        b2.callback = self._mnt_reset
+        b3.callback = self._mnt_sync
+        row.add_item(b1); row.add_item(b2); row.add_item(b3)
+        c.add_item(row)
+        self._add_back_row(c)
+        self.add_item(c)
+
+    async def _mnt_reload(self, interaction):
+        await interaction.response.defer(ephemeral=True, thinking=True)
+        await load_all_settings()
+        await interaction.followup.send("✅ Configurações recarregadas!", ephemeral=True)
+
+    async def _mnt_reset(self, interaction):
+        view = ConfirmarResetView(self.gid)
+        await interaction.response.send_message(view=view, ephemeral=True)
+
+    async def _mnt_sync(self, interaction):
+        await interaction.response.defer(ephemeral=True, thinking=True)
+        try:
+            synced = await bot.tree.sync()
+            await interaction.followup.send(f"🔁 {len(synced)} comandos sincronizados.", ephemeral=True)
+        except Exception as e:
+            await interaction.followup.send(f"❌ Erro: {e}", ephemeral=True)
+
+    async def interaction_check(self, interaction: discord.Interaction) -> bool:
+        if not is_admin(interaction.user):
+            await interaction.response.send_message(
+                "❌ Apenas administradores podem usar este painel.", ephemeral=True)
+            return False
+        return True
+
+# ====================================================================
+# ==================== CRIAÇÃO DE PAINÉIS ============================
+# ====================================================================
+
+async def criar_todos_paineis(guild, settings):
+    msgs = []
+
+    cv_id = settings.get('canal_compra_venda_id')
+    if cv_id:
+        canal = guild.get_channel(int(cv_id))
+        if canal:
+            try:
+                async for m in canal.history(limit=20):
+                    if m.author == bot.user: await m.delete()
+            except: pass
+            try:
+                await canal.send(view=CompraVendaView())
+                msgs.append(f"✅ Compra/Venda → {canal.mention}")
+            except: pass
+
+    pid = settings.get('canal_painel_privado_id')
+    if pid:
+        canal = guild.get_channel(int(pid))
+        if canal:
+            try:
+                async for m in canal.history(limit=20):
+                    if m.author == bot.user: await m.delete()
+            except: pass
+            try:
+                await canal.send(view=BotaoCriarCanalView())
+                msgs.append(f"✅ Painel Privado → {canal.mention}")
+            except: pass
+
+    bid = settings.get('canal_backup_painel_id')
+    if bid:
+        canal = guild.get_channel(int(bid))
+        if canal:
+            try:
+                async for m in canal.history(limit=20):
+                    if m.author == bot.user: await m.delete()
+            except: pass
+            try:
+                await canal.send(view=BackupView())
+                msgs.append(f"✅ Backup → {canal.mention}")
+            except: pass
+
+    aid = settings.get('canal_acoes_painel_id')
+    if aid:
+        canal = guild.get_channel(int(aid))
+        if canal:
+            try:
+                async for m in canal.history(limit=20):
+                    if m.author == bot.user: await m.delete()
+            except: pass
+            try:
+                await canal.send(view=ActionPanelView())
+                msgs.append(f"✅ Ações → {canal.mention}")
+            except: pass
+
+    sid = settings.get('canal_solicitar_set_id')
+    if sid:
+        canal = guild.get_channel(int(sid))
+        if canal:
+            try:
+                async for m in canal.history(limit=20):
+                    if m.author == bot.user: await m.delete()
+            except: pass
+            try:
+                await canal.send(view=SetPainelView())
+                msgs.append(f"✅ SET → {canal.mention}")
+            except: pass
+
+    return "\n".join(msgs) if msgs else "⚠️ Nenhum canal configurado ainda."
+
+# ====================================================================
+# ==================== COMANDOS ======================================
+# ====================================================================
+
+@bot.hybrid_command(name="painel4faixaadmin",
+                    description="Painel administrativo do bot 4FAIXA Seeven")
+@app_commands.default_permissions(administrator=True)
+@commands.has_permissions(administrator=True)
+async def painel4faixaadmin(ctx):
+    if not ctx.guild:
+        await ctx.send("❌ Use em um servidor."); return
+    view = AdminPanelView(ctx.guild.id)
+    await ctx.send(view=view)
+
+@bot.hybrid_command(name="reload_config", description="Recarrega configurações do disco")
+@commands.has_permissions(administrator=True)
+async def reload_config(ctx):
+    await load_all_settings()
+    await ctx.send("✅ Configurações recarregadas!")
+
+@bot.hybrid_command(name="criar_paineis", description="Recria todos os painéis do servidor")
+@commands.has_permissions(administrator=True)
+async def criar_paineis(ctx):
+    settings = bot.guild_settings.get(ctx.guild.id, {})
+    if not settings:
+        await ctx.send("❌ Nenhuma configuração. Use `/painel4faixaadmin`."); return
+    resultado = await criar_todos_paineis(ctx.guild, settings)
+    await ctx.send(resultado)
+
+@bot.hybrid_command(name="config", description="Mostra as configurações atuais do servidor")
+@commands.has_permissions(administrator=True)
+async def show_config(ctx):
+    if not is_admin(ctx.author):
+        return await ctx.send("❌ Sem permissão.")
+    settings = bot.guild_settings.get(ctx.guild.id, {})
+    if not settings:
+        return await ctx.send("❌ Nenhuma configuração definida ainda.")
+    layout = LayoutView()
+    c = Container(accent_color=0x2C2F33)
+    c.add_item(TextDisplay("# ⚙️ Configurações do Bot"))
+    c.add_item(Separator())
+    for k, v in settings.items():
+        if k == 'guild_id': continue
+        c.add_item(TextDisplay(f"**{k}:** `{str(v) if v else '❌'}`"))
+    layout.add_item(c)
+    await ctx.send(view=layout)
+
+@bot.hybrid_command(name="stats", description="Mostra estatísticas do servidor")
+async def server_stats(ctx):
+    gid = ctx.guild.id; gid_str = str(gid)
+    total_usuarios = len(dados["usuarios"].get(gid_str, {}))
+    total_farms = 0; total_ds = 0.0
+    total_canais = len(dados["canais"].get(gid_str, {}))
+    for uid, data in dados["usuarios"].get(gid_str, {}).items():
+        if "removido_em" in data: continue
+        total_farms += len(data.get("farms", []))
+        total_ds += data.get("dinheiro_sujo", 0)
+    layout = LayoutView()
+    c = Container(accent_color=0x2C2F33)
+    c.add_item(TextDisplay("# 📊 Estatísticas do Servidor"))
+    c.add_item(Separator())
+    c.add_item(TextDisplay(
+        f"👥 Usuários com farms: **{total_usuarios}**\n"
+        f"📦 Total de farms: **{total_farms}**\n"
+        f"💰 Dinheiro sujo total: **R$ {total_ds:,.2f}**\n"
+        f"🔓 Canais abertos: **{total_canais}**"
+    ))
+    layout.add_item(c)
+    await ctx.send(view=layout)
+
+@bot.hybrid_command(name="me", description="Mostra seu resumo pessoal")
+async def my_stats(ctx):
+    uid = str(ctx.author.id); gid_str = str(ctx.guild.id)
+    user_data = dados["usuarios"].get(gid_str, {}).get(uid, {})
+    if not user_data:
+        await ctx.send("ℹ️ Você ainda não possui registros."); return
+    farms = user_data.get("farms", [])
+    trans = user_data.get("transacoes_dinheiro_sujo", [])
+    pagamentos = user_data.get("pagamentos", [])
+    total_ds = user_data.get("dinheiro_sujo", 0)
+    total_recebido = sum(p["valor"] for p in pagamentos)
+
+    layout = LayoutView()
+    c = Container(accent_color=0x2C2F33)
+    c.add_item(TextDisplay(f"# 👤 Resumo de {ctx.author.display_name}"))
+    c.add_item(Separator())
+    c.add_item(TextDisplay(
+        f"📦 Farms registrados: **{len(farms)}**\n"
+        f"💰 Dinheiro sujo atual: **R$ {total_ds:,.2f}**\n"
+        f"💵 Total recebido: **R$ {total_recebido:,.2f}**\n"
+        f"📊 Transações de DS: **{len(trans)}**\n"
+        f"📋 Pagamentos recebidos: **{len(pagamentos)}**"
+    ))
+    if farms:
+        ultimo = farms[-1]
+        data = datetime.strptime(ultimo["data"], "%Y-%m-%d %H:%M:%S").strftime("%d/%m/%Y %H:%M")
+        prods = ", ".join(f"{p['produto']}:{p['quantidade']}" for p in ultimo["produtos"])
+        c.add_item(Separator())
+        c.add_item(TextDisplay(f"📌 **Último farm**\n{data} — {prods}"))
+    layout.add_item(c)
+    await ctx.send(view=layout)
+
+@bot.hybrid_command(name="remover_usuario", description="Remove todos os dados de um usuário")
+@commands.has_permissions(administrator=True)
+@app_commands.describe(user="Usuário a remover")
+async def remover_usuario(ctx, user: discord.User):
+    if not is_admin(ctx.author):
+        return await ctx.send("❌ Sem permissão.")
+    total = await limpar_logs_usuario(ctx.guild.id, user.id, user.name)
+    await ctx.send(f"✅ {user.mention} removido. {total} mensagens limpas.")
+    await log_admin(ctx.guild.id, "Usuário removido", f"{user.mention} por {ctx.author.mention}")
+    await atualizar_ranking(ctx.guild.id)
+
+# ====================================================================
+# ==================== EVENTOS =======================================
+# ====================================================================
+
+@bot.event
+async def on_member_remove(member):
+    gid = member.guild.id
+    await limpar_logs_usuario(gid, member.id, member.name)
+    if str(gid) in dados["canais"] and str(member.id) in dados["canais"][str(gid)]:
+        canal = member.guild.get_channel(dados["canais"][str(gid)][str(member.id)])
+        if canal:
+            try: await canal.delete(reason="Usuário saiu")
+            except: pass
+        del dados["canais"][str(gid)][str(member.id)]
+        salvar_dados()
+
+@bot.event
+async def on_guild_join(guild):
+    print(f"Adicionado ao servidor: {guild.name} ({guild.id})")
+    channel = guild.system_channel or (guild.text_channels[0] if guild.text_channels else None)
+    if channel:
+        try:
+            layout = LayoutView()
+            c = Container(accent_color=0x2C2F33)
+            c.add_item(TextDisplay("🎉 **Bot adicionado!** Use `/painel4faixaadmin` para configurar tudo."))
+            layout.add_item(c)
+            await channel.send(view=layout)
+        except: pass
+
+@bot.event
+async def on_ready():
+    print(f"✅ Bot {bot.user} online!")
+    await load_all_settings()
+    try:
+        synced = await bot.tree.sync()
+        print(f"✅ {len(synced)} slash commands sincronizados.")
+    except Exception as e:
+        print(f"❌ Erro ao sincronizar comandos: {e}")
+    for guild in bot.guilds:
+        if guild.id in bot.guild_settings:
+            await atualizar_ranking(guild.id)
+    print("✅ Bot pronto.")
+
+if __name__ == "__main__":
+    carregar_dados()
+    bot.run(TOKEN)
