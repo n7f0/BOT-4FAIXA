@@ -27,41 +27,41 @@ CONFIG_FILE = os.path.join(DATA_DIR, "config_bot.json")
 
 # ==================== CATÁLOGO DE CONFIGURAÇÕES ====================
 SETTINGS_CONFIG = {
-    'canal_logs_id':              ('📋 Canal de Logs',                      'channel'),
-    'canal_admin_logs_id':        ('🛡️ Canal de Logs Admin',               'channel'),
-    'canal_rank_id':              ('🏆 Canal de Ranking',                   'channel'),
-    'canal_registros_id':         ('📝 Canal de Registros (farms)',         'channel'),
-    'canal_backup_painel_id':     ('💾 Canal Painel Backup',                'channel'),
-    'canal_compra_venda_id':      ('🛒 Canal Painel Compra/Venda',          'channel'),
-    'canal_logs_compra_venda_id': ('📊 Canal Logs Compra/Venda',            'channel'),
-    'canal_acoes_painel_id':      ('⚔️ Canal Painel Ações',                 'channel'),
-    'canal_acoes_logs_id':        ('🎯 Canal Logs Ações',                   'channel'),
-    'canal_solicitar_set_id':     ('📋 Canal Solicitar SET',                'channel'),
-    'canal_registros_set_id':     ('📁 Canal Registros SET',                'channel'),
-    'canal_painel_privado_id':    ('🔓 Canal Painel Criar Privado',         'channel'),
-    'categoria_farms_id':         ('📂 Categoria dos Canais de Farm',       'channel'),
-    'cargo_00_id':                ('👑 Cargos de Administrador',            'role'),
-    'cargo_membro_id':            ('👤 Cargos de Membro',                   'role'),
-    'cargo_aprovar_set_id':       ('✅ Cargos Aprovar SET',                 'role'),
-    'cargos_compra_venda_ids':    ('💸 Cargos Compra/Venda',                'role'),
-    'cargos_registrar_acao_ids':  ('⚔️ Cargos Registrar Ação',              'role'),
-    'nome_produto1':              ('📦 Nome Produto 1',                     'produto'),
-    'nome_produto2':              ('📦 Nome Produto 2',                     'produto'),
-    'nome_produto3':              ('📦 Nome Produto 3',                     'produto'),
-    'produto4_nome':              ('📦 Nome Produto 4',                     'produto'),
-    'produto5_nome':              ('📦 Nome Produto 5',                     'produto'),
-    'produto6_nome':              ('📦 Nome Produto 6',                     'produto'),
-    'produto7_nome':              ('📦 Nome Produto 7',                     'produto'),
-    'produto8_nome':              ('📦 Nome Produto 8',                     'produto'),
-    'produto9_nome':              ('📦 Nome Produto 9',                     'produto'),
-    'produto10_nome':             ('📦 Nome Produto 10',                    'produto'),
-    'valor_produto1_por_unidade': ('💰 Valor Unitário Produto 1 (R$)',      'produto'),
-    'valor_produto2_por_unidade': ('💰 Valor Unitário Produto 2 (R$)',      'produto'),
-    'valor_produto3_por_unidade': ('💰 Valor Unitário Produto 3 (R$)',      'produto'),
-    'taxa_lavagem':               ('💧 Taxa de Lavagem (%)',                'sistema'),
-    'taxa_faccao':                ('⚔️ Taxa da Facção (%)',                 'sistema'),
-    'taxa_membro':                ('👤 Taxa do Membro (%)',                 'sistema'),
-    'taxa_acao_lavagem':          ('🎯 Taxa de Lavagem em Ações (%)',       'sistema'),
+    'canal_logs_id':              ('📋 Canal de Logs (Geral)',               'channel'),
+    'canal_admin_logs_id':        ('🛡️ Canal de Logs Admin',                'channel'),
+    'canal_rank_id':              ('🏆 Canal de Ranking',                    'channel'),
+    'canal_registros_id':         ('📝 Canal de Registros (Chat Geral Farms)','channel'),
+    'canal_backup_painel_id':     ('💾 Canal Painel Backup',                 'channel'),
+    'canal_compra_venda_id':      ('🛒 Canal Painel Compra/Venda',           'channel'),
+    'canal_logs_compra_venda_id': ('📊 Canal Logs Compra/Venda',             'channel'),
+    'canal_acoes_painel_id':      ('⚔️ Canal Painel Ações',                  'channel'),
+    'canal_acoes_logs_id':        ('🎯 Canal Logs Ações',                    'channel'),
+    'canal_solicitar_set_id':     ('📋 Canal Solicitar SET',                 'channel'),
+    'canal_registros_set_id':     ('📁 Canal Registros SET',                 'channel'),
+    'canal_painel_privado_id':    ('🔓 Canal Painel Criar Privado',          'channel'),
+    'categoria_farms_id':         ('📂 Categoria dos Canais de Farm',        'channel'),
+    'cargo_00_id':                ('👑 Cargos de Administrador',             'role'),
+    'cargo_membro_id':            ('👤 Cargos de Membro',                    'role'),
+    'cargo_aprovar_set_id':       ('✅ Cargos Aprovar SET',                  'role'),
+    'cargos_compra_venda_ids':    ('💸 Cargos Compra/Venda',                 'role'),
+    'cargos_registrar_acao_ids':  ('⚔️ Cargos Registrar Ação',               'role'),
+    'nome_produto1':              ('📦 Nome Produto 1',                      'produto'),
+    'nome_produto2':              ('📦 Nome Produto 2',                      'produto'),
+    'nome_produto3':              ('📦 Nome Produto 3',                      'produto'),
+    'produto4_nome':              ('📦 Nome Produto 4',                      'produto'),
+    'produto5_nome':              ('📦 Nome Produto 5',                      'produto'),
+    'produto6_nome':              ('📦 Nome Produto 6',                      'produto'),
+    'produto7_nome':              ('📦 Nome Produto 7',                      'produto'),
+    'produto8_nome':              ('📦 Nome Produto 8',                      'produto'),
+    'produto9_nome':              ('📦 Nome Produto 9',                      'produto'),
+    'produto10_nome':             ('📦 Nome Produto 10',                     'produto'),
+    'valor_produto1_por_unidade': ('💰 Valor Unitário Produto 1 (R$)',       'produto'),
+    'valor_produto2_por_unidade': ('💰 Valor Unitário Produto 2 (R$)',       'produto'),
+    'valor_produto3_por_unidade': ('💰 Valor Unitário Produto 3 (R$)',       'produto'),
+    'taxa_lavagem':               ('💧 Taxa de Lavagem (%)',                 'sistema'),
+    'taxa_faccao':                ('⚔️ Taxa da Facção (%)',                  'sistema'),
+    'taxa_membro':                ('👤 Taxa do Membro (%)',                  'sistema'),
+    'taxa_acao_lavagem':          ('🎯 Taxa de Lavagem em Ações (%)',        'sistema'),
 }
 
 ALLOWED_SETTING_KEYS = set(SETTINGS_CONFIG.keys())
@@ -155,6 +155,17 @@ async def load_all_settings():
         except:
             continue
     print(f"✅ Configurações carregadas: {len(bot.guild_settings)} servidores")
+
+    # ✅ Aviso se houver canais duplicados (potencial problema)
+    for gid, s in bot.guild_settings.items():
+        painel = s.get('canal_painel_privado_id')
+        if not painel:
+            continue
+        for key in ['canal_logs_id', 'canal_admin_logs_id', 'canal_registros_id']:
+            if s.get(key) and str(s.get(key)) == str(painel):
+                nome_key = SETTINGS_CONFIG.get(key, (key,))[0]
+                print(f"⚠️  AVISO: Servidor {gid} — '{nome_key}' está configurado no MESMO canal que o Painel Privado ({painel}). "
+                      f"Logs/registros NÃO serão enviados a esse canal (proteção automática).")
     return True
 
 async def save_setting(gid: int, key: str, value):
@@ -190,6 +201,19 @@ def _parse_ids(val):
         return [int(x.strip()) for x in str(val).split(',') if x.strip().isdigit()]
     except:
         return []
+
+def _is_painel_channel(gid, channel) -> bool:
+    """Retorna True se o canal for o canal do Painel Criar Privado.
+    Usado para NUNCA enviar logs/registros a esse canal."""
+    if channel is None:
+        return False
+    painel_id = get_guild_setting(gid, 'canal_painel_privado_id')
+    if not painel_id:
+        return False
+    try:
+        return int(painel_id) == int(channel.id)
+    except:
+        return False
 
 # ==================== PRODUTOS CONFIGURADOS ====================
 _PRODUTO_NOME_KEYS = [
@@ -352,7 +376,7 @@ class ChannelEditView(LayoutView):
         else:
             await interaction.response.send_message("❌ Erro ao salvar.", ephemeral=True)
 
-# ==================== ROLE EDIT (MULTI-SELEÇÃO) ====================
+# ==================== ROLE EDIT ====================
 class RoleEditView(LayoutView):
     def __init__(self, gid, key, label, guild: discord.Guild):
         super().__init__(timeout=300)
@@ -552,8 +576,10 @@ async def salvar_backup_completo(gid, admin_name="Sistema"):
     return os.path.basename(nome)
 
 async def log_acao(gid, acao, usuario, detalhes, cor=None, imagem_url=None, imagem_urls=None):
-    """Envia log no canal geral (canal_logs_id) E no canal admin (canal_admin_logs_id).
-    Inclui imagem(ns) se fornecida(s)."""
+    """Envia log APENAS para:
+       - canal_logs_id (geral)
+       - canal_admin_logs_id (admin)
+       NUNCA para canal_painel_privado_id (proteção automática)."""
     if not gid: return
     cores = {
         "criar_canal": 0x2C2F33, "registrar_farm": 0x2C2F33, "registrar_dinheiro_sujo": 0x4F545C,
@@ -570,12 +596,15 @@ async def log_acao(gid, acao, usuario, detalhes, cor=None, imagem_url=None, imag
     if imagem_urls:
         todas_imgs.extend(imagem_urls)
 
-    # Envia no canal geral
-    canal_geral = await get_configured_channel(gid, 'canal_logs_id')
-    if canal_geral:
+    async def _enviar(canal, header_txt):
+        if not canal:
+            return
+        if _is_painel_channel(gid, canal):
+            print(f"⚠️  Bloqueado envio de log '{acao}' para o canal do Painel Privado ({canal.id})")
+            return
         layout = LayoutView()
         c = Container(accent_color=cor_final)
-        c.add_item(TextDisplay(f"📌 **LOG: {acao.upper()}**"))
+        c.add_item(TextDisplay(header_txt))
         c.add_item(Separator())
         c.add_item(TextDisplay(detalhes))
         if usuario:
@@ -586,28 +615,15 @@ async def log_acao(gid, acao, usuario, detalhes, cor=None, imagem_url=None, imag
             c.add_item(MediaGallery(*[discord.MediaGalleryItem(u) for u in todas_imgs[:10]]))
         layout.add_item(c)
         try:
-            await canal_geral.send(view=layout)
+            await canal.send(view=layout)
         except Exception as e:
-            print(f"Erro log geral: {e}")
+            print(f"Erro ao enviar log '{acao}' em {canal.id}: {e}")
 
-    # Envia no canal admin
+    canal_geral = await get_configured_channel(gid, 'canal_logs_id')
+    await _enviar(canal_geral, f"📌 **LOG: {acao.upper()}**")
+
     canal_admin = await get_configured_channel(gid, 'canal_admin_logs_id')
-    if canal_admin:
-        layout = LayoutView()
-        c = Container(accent_color=cor_final)
-        c.add_item(TextDisplay(f"🛡️ **LOG ADMIN: {acao.upper()}**"))
-        c.add_item(Separator())
-        c.add_item(TextDisplay(detalhes))
-        if usuario:
-            c.add_item(TextDisplay(f"Autor: **{usuario.name}**"))
-        if todas_imgs:
-            c.add_item(Separator())
-            c.add_item(MediaGallery(*[discord.MediaGalleryItem(u) for u in todas_imgs[:10]]))
-        layout.add_item(c)
-        try:
-            await canal_admin.send(view=layout)
-        except Exception as e:
-            print(f"Erro log admin: {e}")
+    await _enviar(canal_admin, f"🛡️ **LOG ADMIN: {acao.upper()}**")
 
 async def log_admin(gid, titulo, descricao, cor=0x99AAB5, imagem_url=None, imagem_urls=None):
     if not gid: return
@@ -616,7 +632,7 @@ async def log_admin(gid, titulo, descricao, cor=0x99AAB5, imagem_url=None, image
     if imagem_urls: todas_imgs.extend(imagem_urls)
 
     canal = await get_configured_channel(gid, 'canal_admin_logs_id')
-    if canal:
+    if canal and not _is_painel_channel(gid, canal):
         layout = LayoutView()
         c = Container(accent_color=cor)
         c.add_item(TextDisplay(f"**{titulo}**"))
@@ -704,7 +720,6 @@ async def atualizar_ranking(gid):
     except: pass
 
     produtos_config = get_produtos_config(gid)
-
     totais_produtos = {prod: 0 for prod in produtos_config}
     produtos_por_usuario = {}
     total_farms = 0
@@ -734,11 +749,7 @@ async def atualizar_ranking(gid):
     if not produtos_config:
         c.add_item(TextDisplay("_Nenhum produto configurado ainda. Configure em `/painel4faixaadmin` → 📦 Produtos._"))
     else:
-        produtos_ordenados = sorted(
-            totais_produtos.items(),
-            key=lambda x: x[1],
-            reverse=True
-        )
+        produtos_ordenados = sorted(totais_produtos.items(), key=lambda x: x[1], reverse=True)
         for idx, (nome_prod, _) in enumerate(produtos_ordenados):
             medalha = ['🥇', '🥈', '🥉', '4️⃣', '5️⃣'][idx] if idx < 5 else f'{idx+1}°'
             top_usuarios = []
@@ -1093,29 +1104,31 @@ class FarmProdutosModal(Modal, title="Registrar Farm Produtos"):
         c.add_item(TextDisplay(f"*Farm #{farm['farm_id']}*"))
         layout.add_item(c)
 
-        # Envia no canal do usuário e FIXA (pin)
+        # 1) Envia no CANAL PRIVADO do usuário e FIXA
         try:
             msg_canal = await self.canal.send(view=layout)
             try:
                 await msg_canal.pin(reason=f"Farm #{farm['farm_id']} registrada")
             except Exception as e:
-                print(f"Erro ao fixar print: {e}")
+                print(f"⚠️  Não foi possível fixar no canal privado {self.canal.id}: {e}")
         except Exception as e:
-            print(f"Erro ao enviar no canal: {e}")
+            print(f"Erro ao enviar no canal privado: {e}")
 
-        # Envia no canal de registros
+        # 2) Envia no CANAL DE REGISTROS (chat geral) — NUNCA no painel privado
         canal_reg = await get_configured_channel(self.gid, 'canal_registros_id')
-        if canal_reg:
+        if canal_reg and not _is_painel_channel(self.gid, canal_reg):
             try:
                 msg_reg = await canal_reg.send(view=layout)
                 try:
                     await msg_reg.pin(reason=f"Farm #{farm['farm_id']}")
                 except: pass
             except: pass
+        elif canal_reg and _is_painel_channel(self.gid, canal_reg):
+            print(f"⚠️  Canal de registros é o mesmo do Painel Privado ({canal_reg.id}). Envio bloqueado.")
 
         await interaction.followup.send("✅ Farm registrada e fixada!", ephemeral=True)
 
-        # Logs (geral + admin) COM IMAGEM
+        # 3) Envia LOG para canal de LOGS GERAL + LOGS ADMIN (com imagem)
         detalhes = (
             f"👤 Usuário: <@{self.uid}>\n"
             f"📦 Itens: {total_itens}\n"
@@ -1164,18 +1177,19 @@ class DinheiroSujoModal(Modal, title="Registrar Dinheiro Sujo"):
         c.add_item(MediaGallery(discord.MediaGalleryItem(img)))
         layout.add_item(c)
 
-        # Envia no canal do usuário e FIXA
+        # Canal privado (pin)
         try:
             msg_canal = await self.canal.send(view=layout)
             try:
                 await msg_canal.pin(reason="Depósito de dinheiro sujo registrado")
             except Exception as e:
-                print(f"Erro ao fixar: {e}")
+                print(f"⚠️  Não foi possível fixar: {e}")
         except Exception as e:
             print(f"Erro ao enviar: {e}")
 
+        # Canal de registros (chat geral)
         canal_reg = await get_configured_channel(self.gid, 'canal_registros_id')
-        if canal_reg:
+        if canal_reg and not _is_painel_channel(self.gid, canal_reg):
             try:
                 msg_reg = await canal_reg.send(view=layout)
                 try: await msg_reg.pin(reason="Depósito DS")
@@ -1253,7 +1267,6 @@ class FechamentoCaixaModal(Modal, title="Finalizar Fechamento"):
         c.add_item(TextDisplay(f"Admin: {interaction.user.display_name}"))
         layout.add_item(c)
 
-        # Envia no canal do usuário e FIXA
         try:
             msg_canal = await self.canal.send(view=layout)
             try:
@@ -1262,7 +1275,7 @@ class FechamentoCaixaModal(Modal, title="Finalizar Fechamento"):
         except: pass
 
         canal_reg = await get_configured_channel(self.gid, 'canal_registros_id')
-        if canal_reg:
+        if canal_reg and not _is_painel_channel(self.gid, canal_reg):
             try:
                 msg_reg = await canal_reg.send(view=layout)
                 try: await msg_reg.pin(reason="Fechamento")
@@ -1374,7 +1387,6 @@ class EditarFarmModal(Modal, title="Editar Farm"):
         c.add_item(MediaGallery(discord.MediaGalleryItem(img)))
         layout.add_item(c)
 
-        # Envia e fixa no canal do usuário
         try:
             msg_canal = await self.canal.send(view=layout)
             try:
@@ -1383,7 +1395,7 @@ class EditarFarmModal(Modal, title="Editar Farm"):
         except: pass
 
         canal_reg = await get_configured_channel(self.gid, 'canal_registros_id')
-        if canal_reg:
+        if canal_reg and not _is_painel_channel(self.gid, canal_reg):
             try:
                 msg_reg = await canal_reg.send(view=layout)
                 try: await msg_reg.pin(reason="Farm editada")
@@ -1463,7 +1475,7 @@ class EditarDinheiroModal(Modal, title="Editar Dinheiro Sujo"):
         except: pass
 
         canal_reg = await get_configured_channel(self.gid, 'canal_registros_id')
-        if canal_reg:
+        if canal_reg and not _is_painel_channel(self.gid, canal_reg):
             try:
                 msg_reg = await canal_reg.send(view=layout)
                 try: await msg_reg.pin(reason="Depósito editado")
@@ -1552,7 +1564,7 @@ class VendaModal(Modal, title="Venda de Munição"):
         dados["compras_vendas"][str(self.gid)].append(registro)
         salvar_dados()
         canal = await get_configured_channel(self.gid, 'canal_logs_compra_venda_id')
-        if canal:
+        if canal and not _is_painel_channel(self.gid, canal):
             layout = LayoutView()
             c = Container(accent_color=0x2C2F33)
             c.add_item(TextDisplay("# 💸 Venda registrada"))
@@ -1590,7 +1602,7 @@ class CompraModal(Modal, title="Compra de Produto"):
         dados["compras_vendas"][str(self.gid)].append(registro)
         salvar_dados()
         canal = await get_configured_channel(self.gid, 'canal_logs_compra_venda_id')
-        if canal:
+        if canal and not _is_painel_channel(self.gid, canal):
             layout = LayoutView()
             c = Container(accent_color=0x2C2F33)
             c.add_item(TextDisplay("# 🛒 Compra registrada"))
@@ -1733,7 +1745,7 @@ class MemberSelectView(LayoutView):
         dados["acoes"][str(self.gid)][aid] = self.info
         salvar_dados()
         canal = await get_configured_channel(self.gid, 'canal_acoes_logs_id')
-        if canal:
+        if canal and not _is_painel_channel(self.gid, canal):
             layout = LayoutView()
             c = Container(accent_color=0x2C2F33)
             c.add_item(TextDisplay("# ⚔️ Nova Ação"))
@@ -1751,7 +1763,6 @@ class MemberSelectView(LayoutView):
             except: pass
         await interaction.followup.send("✅ Ação registrada!", ephemeral=True)
 
-        # Log geral + admin COM IMAGENS
         detalhes = (
             f"⚔️ Ação: {self.info['nome_acao']}\n"
             f"💵 Valor: R$ {self.info['valor']:,.2f}\n"
@@ -1826,7 +1837,7 @@ class ConfirmPaymentView(LayoutView):
                                    "admin_id": interaction.user.id}
             salvar_dados()
             canal = await get_configured_channel(self.gid, 'canal_acoes_logs_id')
-            if canal:
+            if canal and not _is_painel_channel(self.gid, canal):
                 layout = LayoutView()
                 c = Container(accent_color=0x2C2F33)
                 c.add_item(TextDisplay("# ✅ Pagamento Realizado"))
@@ -1890,7 +1901,7 @@ class RecrutadorSelectView(LayoutView):
             "data": datetime.now().strftime("%Y-%m-%d %H:%M:%S")}
         salvar_dados()
         canal = await get_configured_channel(self.modal.gid, 'canal_registros_set_id')
-        if canal:
+        if canal and not _is_painel_channel(self.modal.gid, canal):
             layout = LayoutView()
             c = Container(accent_color=0x2C2F33)
             c.add_item(TextDisplay("# 📋 Nova Solicitação de SET"))
@@ -2203,7 +2214,8 @@ class AdminPanelView(LayoutView):
 
     def _build_canais(self):
         c = self._header("📢 Configuração de Canais",
-                         "Selecione qual canal deseja configurar.")
+                         "Selecione qual canal deseja configurar.\n"
+                         "⚠️ **Nunca** aponte Logs/Registros para o mesmo canal do Painel Privado.")
         options = []
         for key, (label, cat) in SETTINGS_CONFIG.items():
             if cat != 'channel':
